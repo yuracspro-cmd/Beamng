@@ -6,7 +6,11 @@ import re
 st.set_page_config(page_title="Портал BeamNG RP", page_icon="🏎️", layout="wide")
 
 DB_NAME = "beamng_rp.db"
-ADMIN_PASSWORD = st.secrets.get("admin_password", "1234")
+ADMIN_PASSWORD = st.secrets.get("admin_password")
+
+# Максимальная сумма, которую свалка готова заплатить за любую машину (защита от абуза)
+MAX_SCRAP_PAYOUT = 3000 
+DEFAULT_SCRAP_PAYOUT = 500
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -53,7 +57,6 @@ def init_db():
 
 init_db()
 
-# Функция конвертации старых ссылок Google Диска
 fn_fix_image_url = lambda url: (
     f"https://drive.google.com/uc?export=view&id={re.search(r'/file/d/([a-zA-Z0-9_-]+)', url).group(1)}"
     if url and re.search(r'/file/d/([a-zA-Z0-9_-]+)', url)
@@ -129,7 +132,6 @@ page = st.sidebar.radio("Разделы", [
     "👑 Панель Администратора"
 ])
 
-# Универсальная функция отрисовки картинки
 def render_car_image(photo_data, photo_url):
     if photo_data:
         try:
@@ -307,10 +309,10 @@ elif page == "🅿️ Мой Гараж":
                                 st.success("Настройки успешно обновлены!")
                                 st.rerun()
 
-# --- 4. СВАЛКА (УТИЛИЗАЦИЯ) ---
+# --- 4. СВАЛКА (УТИЛИЗАЦИЯ С ЗАЩИТОЙ ОТ АБУЗА) ---
 elif page == "♻️ Свалка (Утилизация)":
     st.title("♻️ Мгновенная утилизация авто")
-    st.write("Сдайте свою машину на свалку! Если у машины была указана цена, вы получите 30% от неё (минимум $300).")
+    st.write(f"Сдайте свою машину на свалку! Свалка выкупает авто за 30% от реальной стоимости (максимум **${MAX_SCRAP_PAYOUT}**).")
 
     if not st.session_state.logged_user:
         st.warning("⚠️ Пожалуйста, войдите в аккаунт в боковой панели.")
@@ -327,10 +329,15 @@ elif page == "♻️ Свалка (Утилизация)":
             st.info("У вас нет машин в личном гараже для утилизации.")
         else:
             for car_id, name, price in my_cars:
-                scrap_value = int(price * 0.3) if price > 0 else 300
+                # ЗАЩИТА ОТ АБУЗА: Выплата ограниченна лимитом MAX_SCRAP_PAYOUT ($3000)
+                calculated_scrap = int(price * 0.3) if price > 0 else DEFAULT_SCRAP_PAYOUT
+                scrap_value = min(calculated_scrap, MAX_SCRAP_PAYOUT)
+                if scrap_value < DEFAULT_SCRAP_PAYOUT:
+                    scrap_value = DEFAULT_SCRAP_PAYOUT
+                
                 col1, col2 = st.columns([3, 1])
                 with col1:
-                    st.write(f"🚘 **{name}** (Оценка: ${price}) -> Выкуп свалки: **${scrap_value}**")
+                    st.write(f"🚘 **{name}** -> Выкуп свалки: **${scrap_value}**")
                 with col2:
                     if st.button(f"♻️ Утилизировать", key=f"scrap_{car_id}"):
                         conn = sqlite3.connect(DB_NAME)
@@ -529,7 +536,6 @@ elif page == "👑 Панель Администратора":
                         if st.button(f"✅ Одобрить машину #{p_id}", key=f"app_{p_id}"):
                             conn = sqlite3.connect(DB_NAME)
                             c = conn.cursor()
-                            # ИСПРАВЛЕНО: добавлено ключевое слово SET
                             c.execute("UPDATE garage SET is_approved = 1 WHERE id = ?", (p_id,))
                             conn.commit()
                             conn.close()
