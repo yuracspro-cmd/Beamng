@@ -12,7 +12,7 @@ DB_NAME = "beamng_rp.db"
 ADMIN_PASSWORD = st.secrets.get("admin_password", "1234")
 FIXED_SCRAP_PAYOUT = 800
 
-# Абсолютно ебанутые, кислотные и психоделические стили для легендарных машин
+# Исправленные и выровненные по размеру стили карточек с психо-эффектами
 st.markdown("""
 <style>
 @keyframes psychoFlash {
@@ -28,19 +28,34 @@ st.markdown("""
     100% { text-shadow: 3px -3px #ff0055, -3px 3px #00ffcc; }
 }
 
-.psycho-legendary-card {
-    border: 4px solid #ff0055;
+/* Общие правила для всех карточек, чтобы они были пиксель-в-пиксель одинакового размера */
+.psycho-legendary-card, .rare-card, .normal-card {
+    box-sizing: border-box;
+    width: 100%;
     border-radius: 16px;
     padding: 15px;
+    margin-bottom: 15px;
+    border: 4px solid;
+}
+
+.psycho-legendary-card {
     background: linear-gradient(135deg, #1a002c 0%, #0a0a16 50%, #200010 100%);
     animation: psychoFlash 1.2s infinite alternate ease-in-out;
-    margin-bottom: 10px;
-    position: relative;
-    overflow: hidden;
+}
+
+.rare-card {
+    border-color: #00bfff;
+    background: rgba(10, 25, 40, 0.9);
+    box-shadow: 0 0 15px rgba(0, 191, 255, 0.4);
+}
+
+.normal-card {
+    border-color: #333333;
+    background: rgba(20, 20, 20, 0.8);
 }
 
 .car-title-legendary {
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 900;
     text-align: center;
     background: linear-gradient(90deg, #ff0055, #00ffcc, #ffff00, #ff00ff, #ff0055);
@@ -48,31 +63,11 @@ st.markdown("""
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     animation: textGlitch 0.4s infinite, goldText 2s linear infinite;
-    margin-bottom: 8px;
+    margin-bottom: 5px;
     text-transform: uppercase;
-}
-
-.legendary-badge {
-    background: linear-gradient(90deg, #ff0055, #9900ff);
-    color: white;
-    text-align: center;
-    font-size: 11px;
-    font-weight: bold;
-    padding: 5px;
-    border-radius: 6px;
-    margin-bottom: 10px;
-    letter-spacing: 1px;
-    box-shadow: 0 0 15px #ff0055;
-    text-transform: uppercase;
-}
-
-.rare-card {
-    border: 2px solid #00bfff;
-    border-radius: 12px;
-    padding: 15px;
-    background: rgba(10, 25, 40, 0.9);
-    box-shadow: 0 0 15px rgba(0, 191, 255, 0.4);
-    margin-bottom: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .car-title-rare {
@@ -80,15 +75,10 @@ st.markdown("""
     font-weight: bold;
     text-align: center;
     color: #00bfff;
-    margin-bottom: 8px;
-}
-
-.normal-card {
-    border: 1px solid #333;
-    border-radius: 12px;
-    padding: 15px;
-    background: rgba(20, 20, 20, 0.8);
-    margin-bottom: 10px;
+    margin-bottom: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .car-title-normal {
@@ -96,12 +86,34 @@ st.markdown("""
     font-weight: bold;
     text-align: center;
     color: #fff;
-    margin-bottom: 8px;
+    margin-bottom: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.legendary-badge {
+    background: linear-gradient(90deg, #ff0055, #9900ff);
+    color: white;
+    text-align: center;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 4px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    letter-spacing: 1px;
+    box-shadow: 0 0 15px #ff0055;
+    text-transform: uppercase;
+}
+
+.badge-placeholder {
+    height: 22px;
+    margin-bottom: 10px;
 }
 
 .car-img {
     width: 100%;
-    height: 170px;
+    height: 160px;
     object-fit: cover;
     border-radius: 8px;
     border: 1px solid rgba(255,255,255,0.2);
@@ -235,7 +247,7 @@ def render_car_card_html(name, photo_data, photo_url, owner, rarity):
         fixed_url = fn_fix_image_url(photo_url)
         img_html = f'<img src="{fixed_url}" class="car-img">'
     else:
-        img_html = '<div style="height:150px; display:flex; align-items:center; justify-content:center; color:#777; background:#111; border-radius:8px; margin-bottom:10px;">Нет изображения</div>'
+        img_html = '<div style="height:160px; display:flex; align-items:center; justify-content:center; color:#777; background:#111; border-radius:8px; margin-bottom:10px;">Нет изображения</div>'
 
     if rarity == "🔥 Легендарная":
         card_html = f"""
@@ -250,6 +262,7 @@ def render_car_card_html(name, photo_data, photo_url, owner, rarity):
         card_html = f"""
         <div class="rare-card">
             <div class="car-title-rare">💎 {name}</div>
+            <div class="badge-placeholder"></div>
             {img_html}
             <div class="car-info">👤 Владелец: <b>{owner}</b></div>
         </div>
@@ -258,6 +271,7 @@ def render_car_card_html(name, photo_data, photo_url, owner, rarity):
         card_html = f"""
         <div class="normal-card">
             <div class="car-title-normal">{name}</div>
+            <div class="badge-placeholder"></div>
             {img_html}
             <div class="car-info">👤 Владелец: <b>{owner}</b></div>
         </div>
