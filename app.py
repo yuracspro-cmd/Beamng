@@ -259,29 +259,62 @@ elif page == "👑 Панель Администратора":
     st.title("👑 Управление Сервером (Админ)")
     
     admin_pass = st.text_input("Введите пароль администратора", type="password")
-    if admin_pass == "1234":
+    # СОВЕТ: Поменяйте "1234" на свой надежный пароль!
+    if admin_pass == "1234": 
         st.success("Доступ разрешен!")
         
         tab1, tab2 = st.tabs(["👥 Игроки", "🏎️ Редактирование Машин"])
         
         with tab1:
-            st.subheader("Изменение баланса / работы игрока")
-            username = st.text_input("Никнейм игрока")
-            balance = st.number_input("Баланс ($)", value=1000, step=100)
-            job = st.selectbox("Работа", ["Курьер", "Дальнобойщик", "Механик", "Полицейский", "Безработный"])
+            st.subheader("Управление игроками (Изменение / Удаление)")
             
-            if st.button("Сохранить игрока"):
+            conn = sqlite3.connect(DB_NAME)
+            c = conn.cursor()
+            c.execute("SELECT username FROM users")
+            all_users = [row[0] for row in c.fetchall()]
+            conn.close()
+
+            if not all_users:
+                st.info("Зарегистрированных игроков пока нет.")
+            else:
+                selected_user = st.selectbox("Выберите игрока для управления", all_users)
+                
+                # Получаем текущие данные выбранного игрока
                 conn = sqlite3.connect(DB_NAME)
                 c = conn.cursor()
-                c.execute("SELECT password FROM users WHERE username = ?", (username,))
-                existing = c.fetchone()
-                pwd = existing[0] if existing else "1234"
-                
-                c.execute("INSERT OR REPLACE INTO users (username, balance, job, password) VALUES (?, ?, ?, ?)",
-                          (username, balance, job, pwd))
-                conn.commit()
+                c.execute("SELECT balance, job FROM users WHERE username = ?", (selected_user,))
+                user_data = c.fetchone()
                 conn.close()
-                st.success(f"Игрок {username} обновлен!")
+                
+                if user_data:
+                    with st.form("edit_user_form"):
+                        new_balance = st.number_input("Баланс ($)", value=user_data[0], step=100)
+                        new_job = st.selectbox("Работа", ["Курьер", "Дальнобойщик", "Механик", "Полицейский", "Безработный"], 
+                                               index=["Курьер", "Дальнобойщик", "Механик", "Полицейский", "Безработный"].index(user_data[1]) if user_data[1] in ["Курьер", "Дальнобойщик", "Механик", "Полицейский", "Безработный"] else 0)
+                        
+                        submitted = st.form_submit_button("💾 Сохранить изменения игрока")
+                        if submitted:
+                            conn = sqlite3.connect(DB_NAME)
+                            c = conn.cursor()
+                            c.execute("UPDATE users SET balance = ?, job = ? WHERE username = ?", (new_balance, new_job, selected_user))
+                            conn.commit()
+                            conn.close()
+                            st.success(f"Данные игрока {selected_user} успешно обновлены!")
+                            st.rerun()
+
+                    # Кнопка удаления игрока (вне формы, чтобы работала отдельно)
+                    st.markdown("---")
+                    if st.button(f"❌ Полностью удалить игрока '{selected_user}' и все его машины"):
+                        conn = sqlite3.connect(DB_NAME)
+                        c = conn.cursor()
+                        # Удаляем самого игрока
+                        c.execute("DELETE FROM users WHERE username = ?", (selected_user,))
+                        # Удаляем все его машины из гаража/авторынка
+                        c.execute("DELETE FROM garage WHERE owner = ?", (selected_user,))
+                        conn.commit()
+                        conn.close()
+                        st.warning(f"Игрок {selected_user} и все его автомобили были удалены из базы!")
+                        st.rerun()
 
         with tab2:
             st.subheader("Редактирование машин в базе")
@@ -299,7 +332,6 @@ elif page == "👑 Панель Администратора":
                 selected_car_id = car_options[selected_car_label]
 
                 conn = sqlite3.connect(DB_NAME)
-                c = conn.cursor()
                 c.execute("SELECT car_name, mod_link, photo_url, owner, price, is_for_sale FROM garage WHERE id = ?", (selected_car_id,))
                 edit_car = c.fetchone()
                 conn.close()
