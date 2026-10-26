@@ -1,12 +1,11 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
+import re
 
 st.set_page_config(page_title="Портал BeamNG RP", page_icon="🏎️", layout="wide")
 
 DB_NAME = "beamng_rp.db"
-
-# Получаем безопасный пароль админа из секретов Streamlit (если нет, запасной "1234")
 ADMIN_PASSWORD = st.secrets.get("admin_password", "1234")
 
 def init_db():
@@ -15,7 +14,6 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS users 
                  (username TEXT PRIMARY KEY, balance INTEGER, job TEXT, password TEXT)''')
     
-    # Добавили поле is_approved (0 - на модерации, 1 - одобрено)
     c.execute('''CREATE TABLE IF NOT EXISTS garage 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   car_name TEXT, 
@@ -28,7 +26,6 @@ def init_db():
                   is_for_sale INTEGER DEFAULT 0,
                   is_approved INTEGER DEFAULT 0)''')
     
-    # Безопасное добавление колонок для старых баз данных
     try:
         c.execute("ALTER TABLE users ADD COLUMN password TEXT")
     except sqlite3.OperationalError:
@@ -51,12 +48,22 @@ def init_db():
 
 init_db()
 
+# Функция для превращения ссылки Google Диска в прямую картинку
+fn_fix_image_url = lambda url: (
+    f"https://drive.google.com/uc?export=view&id={re.search(r'/file/d/([a-zA-Z0-9_-]+)', url).group(1)}"
+    if url and re.search(r'/file/d/([a-zA-Z0-9_-]+)', url)
+    else (
+        f"https://drive.google.com/uc?export=view&id={re.search(r'[?&]id=([a-zA-Z0-9_-]+)', url).group(1)}"
+        if url and re.search(r'[?&]id=([a-zA-Z0-9_-]+)', url)
+        else url
+    )
+)
+
 if "logged_user" not in st.session_state:
     st.session_state.logged_user = None
 
 # --- БОКОВАЯ ПАНЕЛЬ И АВТОРИЗАЦИЯ ---
 st.sidebar.title("🎮 BeamNG.mp RP")
-
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔐 Аккаунт игрока")
 
@@ -66,39 +73,42 @@ if st.session_state.logged_user is None:
     
     col_l1, col_l2 = st.sidebar.columns(2)
     with col_l1:
-        if st.button("Войти"):
-            if login_user and login_pass:
-                conn = sqlite3.connect(DB_NAME)
-                c = conn.cursor()
-                c.execute("SELECT password FROM users WHERE username = ?", (login_user,))
-                row = c.fetchone()
+        if st.sidebar.button("Войти") or st.button("Войти_"): # Кнопки входа
+            pass # Обработка ниже через формы или колонки
+    # Простой блок авторизации в сайдбаре
+    if st.sidebar.button("Войти в систему"):
+        if login_user and login_pass:
+            conn = sqlite3.connect(DB_NAME)
+            c = conn.cursor()
+            c.execute("SELECT password FROM users WHERE username = ?", (login_user,))
+            row = c.fetchone()
+            conn.close()
+            if row and row[0] == login_pass:
+                st.session_state.logged_user = login_user
+                st.success(f"Вход выполнен, {login_user}!")
+                st.rerun()
+            else:
+                st.sidebar.error("Неверный ник или пароль!")
+        else:
+            st.sidebar.warning("Введите ник и пароль.")
+            
+    if st.sidebar.button("Зарегистрироваться"):
+        if login_user and login_pass:
+            conn = sqlite3.connect(DB_NAME)
+            c = conn.cursor()
+            c.execute("SELECT username FROM users WHERE username = ?", (login_user,))
+            if c.fetchone():
+                st.sidebar.error("Игрок с таким ником уже существует!")
+            else:
+                c.execute("INSERT INTO users (username, balance, job, password) VALUES (?, 1000, 'Безработный', ?)", 
+                          (login_user, login_pass))
+                conn.commit()
                 conn.close()
-                if row and row[0] == login_pass:
-                    st.session_state.logged_user = login_user
-                    st.success(f"Вход выполнен, {login_user}!")
-                    st.rerun()
-                else:
-                    st.sidebar.error("Неверный ник или пароль!")
-            else:
-                st.sidebar.warning("Введите ник и пароль.")
-    with col_l2:
-        if st.button("Регистрация"):
-            if login_user and login_pass:
-                conn = sqlite3.connect(DB_NAME)
-                c = conn.cursor()
-                c.execute("SELECT username FROM users WHERE username = ?", (login_user,))
-                if c.fetchone():
-                    st.sidebar.error("Игрок с таким ником уже существует!")
-                else:
-                    c.execute("INSERT INTO users (username, balance, job, password) VALUES (?, 1000, 'Безработный', ?)", 
-                              (login_user, login_pass))
-                    conn.commit()
-                    conn.close()
-                    st.session_state.logged_user = login_user
-                    st.sidebar.success(f"Аккаунт создан! Добро пожаловать, {login_user}!")
-                    st.rerun()
-            else:
-                st.sidebar.warning("Введите ник и пароль для регистрации.")
+                st.session_state.logged_user = login_user
+                st.sidebar.success(f"Аккаунт создан! Добро пожаловать, {login_user}!")
+                st.rerun()
+        else:
+            st.sidebar.warning("Введите ник и пароль для регистрации.")
 else:
     st.sidebar.success(f"Вы вошли как: **{st.session_state.logged_user}**")
     if st.sidebar.button("Выйти из аккаунта"):
@@ -107,51 +117,50 @@ else:
 
 st.sidebar.markdown("---")
 page = st.sidebar.radio("Разделы", [
-    "🏎️ Гараж и Авторынок", 
+    "🏎️ Общий Гараж", 
+    "🏷️ Авторынок",
+    "🅿️ Мой Гараж",
     "♻️ Свалка (Утилизация)",
     "💰 Игроки и Балансы", 
     "➕ Добавить машину", 
     "👑 Панель Администратора"
 ])
 
-# --- 1. ГАРАЖ И АВТОРЫНОК (Показываем только одобренные машины + свои на модерации) ---
-if page == "🏎️ Гараж и Авторынок":
-    st.title("🏎️ Гараж и Авторынок")
-    st.write("Смотрите машины, скачивайте .pc конфигурации или покупайте авто у других игроков!")
+# --- 1. ОБЩИЙ ГАРАЖ ---
+if page == "🏎️ Общий Гараж":
+    st.title("🏎️ Общий Гараж сервера")
+    st.write("Здесь хранятся все одобренные администратором автомобили игроков.")
 
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    # Загружаем одобренные машины ИЛИ личные неодобренные машины текущего игрока
-    if st.session_state.logged_user:
-        c.execute("""SELECT id, car_name, mod_link, pc_filename, pc_data, photo_url, owner, price, is_for_sale, is_approved 
-                     FROM garage WHERE is_approved = 1 OR owner = ?""", (st.session_state.logged_user,))
-    else:
-        c.execute("""SELECT id, car_name, mod_link, pc_filename, pc_data, photo_url, owner, price, is_for_sale, is_approved 
-                     FROM garage WHERE is_approved = 1""")
+    c.execute("""SELECT id, car_name, mod_link, pc_filename, pc_data, photo_url, owner, price, is_for_sale 
+                 FROM garage WHERE is_approved = 1""")
     cars = c.fetchall()
     conn.close()
 
     if not cars:
-        st.info("В гараже пока нет машин.")
+        st.info("В общем гараже пока нет одобренных машин.")
     else:
         cols = st.columns(3)
         for idx, car in enumerate(cars):
-            car_id, name, mod_link, pc_filename, pc_data, photo_url, owner, price, is_for_sale, is_approved = car
+            car_id, name, mod_link, pc_filename, pc_data, photo_url, owner, price, is_for_sale = car
             col = cols[idx % 3]
             
             with col:
                 st.subheader(name)
-                if photo_url:
-                    st.image(photo_url, use_container_width=True)
+                fixed_photo = fn_fix_image_url(photo_url)
+                if fixed_photo:
+                    try:
+                        st.image(fixed_photo, use_container_width=True)
+                    except Exception:
+                        st.warning("Не удалось загрузить фото по ссылке.")
                 
                 st.caption(f"👤 Владелец: **{owner}**")
                 
-                if is_approved == 0:
-                    st.error("⏳ НА МОДЕРАЦИИ (Видна только вам)")
-                elif is_for_sale:
-                    st.warning(f"🏷️ ПРОДАЕТСЯ: **${price}**")
+                if is_for_sale:
+                    st.warning(f"🏷️ ПРОДАЕТСЯ НА РЫНКЕ: **${price}**")
                 else:
-                    st.info("🅿️ Личный гараж (Не продается)")
+                    st.info("🅿️ В личном пользовании")
 
                 st.markdown(f"🔗 [Скачать мод]({mod_link})")
                 
@@ -160,48 +169,152 @@ if page == "🏎️ Гараж и Авторынок":
                     data=pc_data,
                     file_name=pc_filename,
                     mime="text/plain",
-                    key=f"dl_{car_id}"
+                    key=f"dl_gen_{car_id}"
                 )
-
-                # Покупка машины на авторынке (только если она одобрена)
-                if is_for_sale and is_approved == 1:
-                    st.markdown("---")
-                    if st.session_state.logged_user:
-                        if st.session_state.logged_user == owner:
-                            st.info("Это ваша машина на продаже.")
-                        else:
-                            if st.button(f"🛒 Купить за ${price}", key=f"buy_{car_id}"):
-                                buyer_name = st.session_state.logged_user
-                                conn = sqlite3.connect(DB_NAME)
-                                c = conn.cursor()
-                                c.execute("SELECT balance FROM users WHERE username = ?", (buyer_name,))
-                                row = c.fetchone()
-                                if row and row[0] >= price:
-                                    new_balance = row[0] - price
-                                    c.execute("UPDATE users SET balance = ? WHERE username = ?", (new_balance, buyer_name))
-                                    c.execute("UPDATE users SET balance = balance + ? WHERE username = ?", (price, owner))
-                                    c.execute("UPDATE garage SET owner = ?, is_for_sale = 0 WHERE id = ?", (buyer_name, car_id))
-                                    conn.commit()
-                                    conn.close()
-                                    st.success("Успешно! Вы купили эту машину.")
-                                    st.rerun()
-                                else:
-                                    st.error("Недостаточно денег на вашем балансе!")
-                                    conn.close()
-                    else:
-                        st.warning("⚠️ Войдите в аккаунт, чтобы купить машину.")
                 st.markdown("---")
 
-# --- 2. СВАЛКА (УТИЛИЗАЦИЯ) ---
+# --- 2. АВТОРЫНОК ---
+elif page == "🏷️ Авторынок":
+    st.title("🏷️ Авторынок")
+    st.write("Машины, которые игроки выставили на продажу. Покупайте в один клик!")
+
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("""SELECT id, car_name, mod_link, pc_filename, pc_data, photo_url, owner, price 
+                 FROM garage WHERE is_approved = 1 AND is_for_sale = 1""")
+    cars = c.fetchall()
+    conn.close()
+
+    if not cars:
+        st.info("На авторынке сейчас нет машин на продажу.")
+    else:
+        cols = st.columns(3)
+        for idx, car in enumerate(cars):
+            car_id, name, mod_link, pc_filename, pc_data, photo_url, owner, price = car
+            col = cols[idx % 3]
+            
+            with col:
+                st.subheader(name)
+                fixed_photo = fn_fix_image_url(photo_url)
+                if fixed_photo:
+                    try:
+                        st.image(fixed_photo, use_container_width=True)
+                    except Exception:
+                        pass
+                
+                st.caption(f"👤 Продавец: **{owner}**")
+                st.warning(f"💵 Цена: **${price}**")
+
+                st.markdown(f"🔗 [Скачать мод]({mod_link})")
+                st.download_button(
+                    label=f"📥 Скачать {pc_filename}",
+                    data=pc_data,
+                    file_name=pc_filename,
+                    mime="text/plain",
+                    key=f"dl_market_{car_id}"
+                )
+
+                st.markdown("---")
+                if st.session_state.logged_user:
+                    if st.session_state.logged_user == owner:
+                        st.info("Это ваша машина.")
+                    else:
+                        if st.button(f"🛒 Купить за ${price}", key=f"buy_market_{car_id}"):
+                            buyer_name = st.session_state.logged_user
+                            conn = sqlite3.connect(DB_NAME)
+                            c = conn.cursor()
+                            c.execute("SELECT balance FROM users WHERE username = ?", (buyer_name,))
+                            row = c.fetchone()
+                            if row and row[0] >= price:
+                                new_balance = row[0] - price
+                                c.execute("UPDATE users SET balance = ? WHERE username = ?", (new_balance, buyer_name))
+                                c.execute("UPDATE users SET balance = balance + ? WHERE username = ?", (price, owner))
+                                c.execute("UPDATE garage SET owner = ?, is_for_sale = 0, price = 0 WHERE id = ?", (buyer_name, car_id))
+                                conn.commit()
+                                conn.close()
+                                st.success("Успешно! Вы купили эту машину.")
+                                st.rerun()
+                            else:
+                                st.error("Недостаточно денег на вашем балансе!")
+                                conn.close()
+                else:
+                    st.warning("⚠️ Войдите в аккаунт, чтобы купить машину.")
+                st.markdown("---")
+
+# --- 3. МОЙ ГАРАЖ ---
+elif page == "🅿️ Мой Гараж":
+    st.title("🅿️ Мой Личный Гараж")
+    
+    if not st.session_state.logged_user:
+        st.warning("⚠️ Пожалуйста, войдите в аккаунт в боковой панели, чтобы управлять своими машинами.")
+    else:
+        current_user = st.session_state.logged_user
+        st.write(f"Управление автомобилями игрока: **{current_user}**")
+
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute("""SELECT id, car_name, mod_link, pc_filename, pc_data, photo_url, price, is_for_sale, is_approved 
+                     FROM garage WHERE owner = ?""", (current_user,))
+        my_cars = c.fetchall()
+        conn.close()
+
+        if not my_cars:
+            st.info("У вас пока нет добавленных машин в гараже.")
+        else:
+            for car in my_cars:
+                car_id, name, mod_link, pc_filename, pc_data, photo_url, price, is_for_sale, is_approved = car
+                
+                with st.expander(f"🚘 {name} (ID: {car_id})"):
+                    col_img, col_info = st.columns([1, 2])
+                    with col_img:
+                        fixed_photo = fn_fix_image_url(photo_url)
+                        if fixed_photo:
+                            try:
+                                st.image(fixed_photo, use_container_width=True)
+                            except Exception:
+                                pass
+                    with col_info:
+                        if is_approved == 0:
+                            st.error("⏳ Статус: На модерации у администратора")
+                        else:
+                            st.success("✅ Статус: Одобрено")
+                        
+                        st.markdown(f"🔗 [Ссылка на мод]({mod_link})")
+                        st.download_button(
+                            label=f"📥 Скачать конфигурацию {pc_filename}",
+                            data=pc_data,
+                            file_name=pc_filename,
+                            mime="text/plain",
+                            key=f"dl_my_{car_id}"
+                        )
+
+                        # Управление продажей прямо из личного гаража
+                        st.markdown("---")
+                        with st.form(f"sale_form_{car_id}"):
+                            st.subheader("Настройки авторынка")
+                            new_sale_status = st.checkbox("Выставить на Авторынок", value=bool(is_for_sale))
+                            new_car_price = st.number_input("Цена продажи ($)", value=int(price), step=100)
+                            
+                            update_btn = st.form_submit_button("Сохранить настройки продажи")
+                            if update_btn:
+                                conn = sqlite3.connect(DB_NAME)
+                                c = conn.cursor()
+                                c.execute("UPDATE garage SET is_for_sale = ?, price = ? WHERE id = ?", 
+                                          (1 if new_sale_status else 0, new_car_price, car_id))
+                                conn.commit()
+                                conn.close()
+                                st.success("Настройки успешно обновлены!")
+                                st.rerun()
+
+# --- 4. СВАЛКА (УТИЛИЗАЦИЯ) ---
 elif page == "♻️ Свалка (Утилизация)":
     st.title("♻️ Мгновенная утилизация авто")
-    st.write("Сдайте свою машину на свалку! Вы получите **30% от её цены** мгновенно.")
+    st.write("Сдайте свою машину на свалку! Если у машины была указана цена, вы получите 30% от неё (минимум $300).")
 
     if not st.session_state.logged_user:
-        st.warning("⚠️ Пожалуйста, войдите в аккаунт в боковой панели, чтобы увидеть свои машины.")
+        st.warning("⚠️ Пожалуйста, войдите в аккаунт в боковой панели.")
     else:
         owner_search = st.session_state.logged_user
-        st.info(f"Вы управляете гаражом игрока: **{owner_search}**")
         
         conn = sqlite3.connect(DB_NAME)
         c = conn.cursor()
@@ -210,7 +323,7 @@ elif page == "♻️ Свалка (Утилизация)":
         conn.close()
 
         if not my_cars:
-            st.info("У вас нет машин в личном гараже.")
+            st.info("У вас нет машин в личном гараже для утилизации.")
         else:
             for car_id, name, price in my_cars:
                 scrap_value = int(price * 0.3) if price > 0 else 300
@@ -228,7 +341,7 @@ elif page == "♻️ Свалка (Утилизация)":
                         st.success(f"Машина утилизирована! Вы получили ${scrap_value}.")
                         st.rerun()
 
-# --- 3. ИГРОКИ И БАЛАНСЫ ---
+# --- 5. ИГРОКИ И БАЛАНСЫ ---
 elif page == "💰 Игроки и Балансы":
     st.title("💰 Экономика и Список Игроков")
     conn = sqlite3.connect(DB_NAME)
@@ -240,7 +353,7 @@ elif page == "💰 Игроки и Балансы":
     else:
         st.dataframe(df, use_container_width=True)
 
-# --- 4. ДОБАВИТЬ МАШИНУ ---
+# --- 6. ДОБАВИТЬ МАШИНУ ---
 elif page == "➕ Добавить машину":
     st.title("➕ Добавление автомобиля")
     
@@ -251,9 +364,12 @@ elif page == "➕ Добавить машину":
             st.write(f"Владелец: **{st.session_state.logged_user}** (автоматически)")
             car_name = st.text_input("Название машины")
             mod_link = st.text_input("Ссылка на мод")
-            photo_url = st.text_input("Ссылка на скриншот")
-            price = st.number_input("Цена машины ($)", value=1000, step=500)
-            is_for_sale = st.checkbox("Выставить сразу на Авторынок? (появится после одобрения админом)")
+            photo_url = st.text_input("Ссылка на скриншот (Поддерживаются обычные ссылки и ссылки с Google Диска)")
+            
+            # Поле цены теперь необязательное / опциональное
+            is_for_sale = st.checkbox("Выставить сразу на Авторынок?")
+            price = st.number_input("Цена машины ($) [укажите, если продаете]", value=0, step=500)
+            
             uploaded_pc = st.file_uploader("Загрузите .pc файл", type=["pc"])
             
             submit = st.form_submit_button("Отправить на модерацию")
@@ -263,24 +379,22 @@ elif page == "➕ Добавить машину":
                     pc_bytes = uploaded_pc.read()
                     conn = sqlite3.connect(DB_NAME)
                     c = conn.cursor()
-                    # is_approved ставим в 0 (требует проверки)
                     c.execute("""INSERT INTO garage 
                                  (car_name, mod_link, pc_filename, pc_data, photo_url, owner, price, is_for_sale, is_approved) 
                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)""",
-                              (car_name, mod_link, uploaded_pc.name, pc_bytes, photo_url, st.session_state.logged_user, price, 1 if is_for_sale else 0))
+                              (car_name, mod_link, uploaded_pc.name, pc_bytes, photo_url, st.session_state.logged_user, price if is_for_sale else 0, 1 if is_for_sale else 0))
                     conn.commit()
                     conn.close()
-                    st.success("Машина отправлена на проверку администратору! Она появится в гараже после одобрения.")
+                    st.success("Машина отправлена на проверку администратору! Она появится в личном и общем гараже после одобрения.")
                 else:
-                    st.error("Заполните все текстовые поля и загрузите .pc файл!")
+                    st.error("Заполните название, ссылку на мод и загрузите .pc файл!")
 
-# --- 5. ПАНЕЛЬ АДМИНИСТРАТОРА ---
+# --- 7. ПАНЕЛЬ АДМИНИСТРАТОРА ---
 elif page == "👑 Панель Администратора":
     st.title("👑 Управление Сервером (Админ)")
     
     admin_pass = st.text_input("Введите пароль администратора", type="password")
     
-    # Сравниваем введённый пароль со скрытым секретом
     if admin_pass == ADMIN_PASSWORD and ADMIN_PASSWORD != "":
         st.success("Доступ разрешен!")
         
@@ -405,8 +519,12 @@ elif page == "👑 Панель Администратора":
                     st.markdown(f"### 🚘 {p_name} (ID: {p_id})")
                     st.write(f"👤 **Владелец:** {p_owner} | 💵 **Цена:** ${p_price}")
                     st.markdown(f"🔗 [Ссылка на мод]({p_link})")
-                    if p_photo:
-                        st.image(p_photo, width=300)
+                    fixed_p = fn_fix_image_url(p_photo)
+                    if fixed_p:
+                        try:
+                            st.image(fixed_p, width=300)
+                        except Exception:
+                            pass
                     
                     col_ap1, col_ap2 = st.columns(2)
                     with col_ap1:
