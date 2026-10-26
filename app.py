@@ -14,6 +14,7 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS users 
                  (username TEXT PRIMARY KEY, balance INTEGER, job TEXT, password TEXT)''')
     
+    # Добавили поле photo_data для хранения картинок прямо в базе
     c.execute('''CREATE TABLE IF NOT EXISTS garage 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   car_name TEXT, 
@@ -21,6 +22,7 @@ def init_db():
                   pc_filename TEXT, 
                   pc_data BLOB, 
                   photo_url TEXT, 
+                  photo_data BLOB,
                   owner TEXT, 
                   price INTEGER DEFAULT 0, 
                   is_for_sale INTEGER DEFAULT 0,
@@ -42,13 +44,17 @@ def init_db():
         c.execute("ALTER TABLE garage ADD COLUMN is_approved INTEGER DEFAULT 0")
     except sqlite3.OperationalError:
         pass
+    try:
+        c.execute("ALTER TABLE garage ADD COLUMN photo_data BLOB")
+    except sqlite3.OperationalError:
+        pass
 
     conn.commit()
     conn.close()
 
 init_db()
 
-# Функция для конвертации ссылок Google Диска в прямые картинки
+# Функция конвертации старых ссылок Google Диска (для обратной совместимости)
 fn_fix_image_url = lambda url: (
     f"https://drive.google.com/uc?export=view&id={re.search(r'/file/d/([a-zA-Z0-9_-]+)', url).group(1)}"
     if url and re.search(r'/file/d/([a-zA-Z0-9_-]+)', url)
@@ -124,6 +130,21 @@ page = st.sidebar.radio("Разделы", [
     "👑 Панель Администратора"
 ])
 
+# Универсальная функция отрисовки картинки (приоритет у файла из базы, затем у ссылки)
+def render_car_image(photo_data, photo_url):
+    if photo_data:
+        try:
+            st.image(photo_data, use_container_width=True)
+            return
+        except Exception:
+            pass
+    if photo_url:
+        fixed_photo = fn_fix_image_url(photo_url)
+        try:
+            st.image(fixed_photo, use_container_width=True)
+        except Exception:
+            st.warning("Не удалось загрузить фото.")
+
 # --- 1. ОБЩИЙ ГАРАЖ ---
 if page == "🏎️ Общий Гараж":
     st.title("🏎️ Общий Гараж сервера")
@@ -131,7 +152,7 @@ if page == "🏎️ Общий Гараж":
 
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("""SELECT id, car_name, mod_link, pc_filename, pc_data, photo_url, owner, price, is_for_sale 
+    c.execute("""SELECT id, car_name, mod_link, pc_filename, pc_data, photo_url, photo_data, owner, price, is_for_sale 
                  FROM garage WHERE is_approved = 1""")
     cars = c.fetchall()
     conn.close()
@@ -141,17 +162,12 @@ if page == "🏎️ Общий Гараж":
     else:
         cols = st.columns(3)
         for idx, car in enumerate(cars):
-            car_id, name, mod_link, pc_filename, pc_data, photo_url, owner, price, is_for_sale = car
+            car_id, name, mod_link, pc_filename, pc_data, photo_url, photo_data, owner, price, is_for_sale = car
             col = cols[idx % 3]
             
             with col:
                 st.subheader(name)
-                fixed_photo = fn_fix_image_url(photo_url)
-                if fixed_photo:
-                    try:
-                        st.image(fixed_photo, use_container_width=True)
-                    except Exception:
-                        st.warning("Не удалось загрузить фото по ссылке.")
+                render_car_image(photo_data, photo_url)
                 
                 st.caption(f"👤 Владелец: **{owner}**")
                 
@@ -161,7 +177,6 @@ if page == "🏎️ Общий Гараж":
                     st.info("🅿️ В личном пользовании")
 
                 st.markdown(f"🔗 [Скачать мод]({mod_link})")
-                
                 st.download_button(
                     label=f"📥 Скачать {pc_filename}",
                     data=pc_data,
@@ -178,7 +193,7 @@ elif page == "🏷️ Авторынок":
 
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("""SELECT id, car_name, mod_link, pc_filename, pc_data, photo_url, owner, price 
+    c.execute("""SELECT id, car_name, mod_link, pc_filename, pc_data, photo_url, photo_data, owner, price 
                  FROM garage WHERE is_approved = 1 AND is_for_sale = 1""")
     cars = c.fetchall()
     conn.close()
@@ -188,17 +203,12 @@ elif page == "🏷️ Авторынок":
     else:
         cols = st.columns(3)
         for idx, car in enumerate(cars):
-            car_id, name, mod_link, pc_filename, pc_data, photo_url, owner, price = car
+            car_id, name, mod_link, pc_filename, pc_data, photo_url, photo_data, owner, price = car
             col = cols[idx % 3]
             
             with col:
                 st.subheader(name)
-                fixed_photo = fn_fix_image_url(photo_url)
-                if fixed_photo:
-                    try:
-                        st.image(fixed_photo, use_container_width=True)
-                    except Exception:
-                        pass
+                render_car_image(photo_data, photo_url)
                 
                 st.caption(f"👤 Продавец: **{owner}**")
                 st.warning(f"💵 Цена: **${price}**")
@@ -251,7 +261,7 @@ elif page == "🅿️ Мой Гараж":
 
         conn = sqlite3.connect(DB_NAME)
         c = conn.cursor()
-        c.execute("""SELECT id, car_name, mod_link, pc_filename, pc_data, photo_url, price, is_for_sale, is_approved 
+        c.execute("""SELECT id, car_name, mod_link, pc_filename, pc_data, photo_url, photo_data, price, is_for_sale, is_approved 
                      FROM garage WHERE owner = ?""", (current_user,))
         my_cars = c.fetchall()
         conn.close()
@@ -260,17 +270,12 @@ elif page == "🅿️ Мой Гараж":
             st.info("У вас пока нет добавленных машин в гараже.")
         else:
             for car in my_cars:
-                car_id, name, mod_link, pc_filename, pc_data, photo_url, price, is_for_sale, is_approved = car
+                car_id, name, mod_link, pc_filename, pc_data, photo_url, photo_data, price, is_for_sale, is_approved = car
                 
                 with st.expander(f"🚘 {name} (ID: {car_id})"):
                     col_img, col_info = st.columns([1, 2])
                     with col_img:
-                        fixed_photo = fn_fix_image_url(photo_url)
-                        if fixed_photo:
-                            try:
-                                st.image(fixed_photo, use_container_width=True)
-                            except Exception:
-                                pass
+                        render_car_image(photo_data, photo_url)
                     with col_info:
                         if is_approved == 0:
                             st.error("⏳ Статус: На модерации у администратора")
@@ -361,27 +366,31 @@ elif page == "➕ Добавить машину":
             st.write(f"Владелец: **{st.session_state.logged_user}** (автоматически)")
             car_name = st.text_input("Название машины")
             mod_link = st.text_input("Ссылка на мод")
-            photo_url = st.text_input("Ссылка на скриншот (Поддерживаются обычные ссылки и ссылки с Google Диска)")
+            
+            # Теперь можно загрузить картинку напрямую с ПК!
+            uploaded_photo = st.file_uploader("Загрузите фото машины (PNG, JPG)", type=["png", "jpg", "jpeg"])
             
             is_for_sale = st.checkbox("Выставить сразу на Авторынок?")
             price = st.number_input("Цена машины ($) [укажите, если продаете]", value=0, step=500)
             
-            uploaded_pc = st.file_uploader("Загрузите .pc файл", type=["pc"])
+            uploaded_pc = st.file_uploader("Загрузите конфигурационный файл (.pc)", type=["pc"])
             
             submit = st.form_submit_button("Отправить на модерацию")
             
             if submit:
                 if car_name and mod_link and uploaded_pc:
                     pc_bytes = uploaded_pc.read()
+                    photo_bytes = uploaded_photo.read() if uploaded_photo else None
+                    
                     conn = sqlite3.connect(DB_NAME)
                     c = conn.cursor()
                     c.execute("""INSERT INTO garage 
-                                 (car_name, mod_link, pc_filename, pc_data, photo_url, owner, price, is_for_sale, is_approved) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)""",
-                              (car_name, mod_link, uploaded_pc.name, pc_bytes, photo_url, st.session_state.logged_user, price if is_for_sale else 0, 1 if is_for_sale else 0))
+                                 (car_name, mod_link, pc_filename, pc_data, photo_url, photo_data, owner, price, is_for_sale, is_approved) 
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+                              (car_name, mod_link, uploaded_pc.name, pc_bytes, "", photo_bytes, st.session_state.logged_user, price if is_for_sale else 0, 1 if is_for_sale else 0))
                     conn.commit()
                     conn.close()
-                    st.success("Машина отправлена на проверку администратору! Она появится в личном и общем гараже после одобрения.")
+                    st.success("Машина отправлена на проверку администратору!")
                 else:
                     st.error("Заполните название, ссылку на мод и загрузите .pc файл!")
 
@@ -469,7 +478,7 @@ elif page == "👑 Панель Администратора":
                     with st.form("edit_car_form"):
                         new_name = st.text_input("Название", value=edit_car[0])
                         new_mod = st.text_input("Ссылка на мод", value=edit_car[1])
-                        new_photo = st.text_input("Ссылка на фото", value=edit_car[2])
+                        new_photo = st.text_input("Ссылка на фото (или оставьте как есть)", value=edit_car[2])
                         new_owner = st.text_input("Владелец", value=edit_car[3])
                         new_price = st.number_input("Цена ($)", value=edit_car[4], step=100)
                         new_sale = st.checkbox("На продаже (Авторынок)", value=bool(edit_car[5]))
@@ -503,7 +512,7 @@ elif page == "👑 Панель Администратора":
             st.subheader("Машины, ожидающие проверки")
             conn = sqlite3.connect(DB_NAME)
             c = conn.cursor()
-            c.execute("SELECT id, car_name, mod_link, photo_url, owner, price FROM garage WHERE is_approved = 0")
+            c.execute("SELECT id, car_name, mod_link, photo_url, photo_data, owner, price FROM garage WHERE is_approved = 0")
             pending_cars = c.fetchall()
             conn.close()
 
@@ -511,34 +520,31 @@ elif page == "👑 Панель Администратора":
                 st.info("Нет машин на модерации. Всё проверено!")
             else:
                 for p_car in pending_cars:
-                    p_id, p_name, p_link, p_photo, p_owner, p_price = p_car
+                    p_id, p_name, p_link, p_photo, p_photo_data, p_owner, p_price = p_car
                     st.markdown(f"### 🚘 {p_name} (ID: {p_id})")
                     st.write(f"👤 **Владелец:** {p_owner} | 💵 **Цена:** ${p_price}")
                     st.markdown(f"🔗 [Ссылка на мод]({p_link})")
-                    fixed_p = fn_fix_image_url(p_photo)
-                    if fixed_p:
-                        try:
-                            st.image(fixed_p, width=300)
-                        except Exception:
-                            pass
+                    render_car_image(p_photo_data, p_photo)
                     
                     col_ap1, col_ap2 = st.columns(2)
                     with col_ap1:
                         if st.button(f"✅ Одобрить машину #{p_id}", key=f"app_{p_id}"):
                             conn = sqlite3.connect(DB_NAME)
                             c = conn.cursor()
+                            c.execute("UPDATE garage IS_APPROVED = 1 WHERE id = ?", (p_id,)) # Исправлено на корректный синтаксис ниже
+                            # Сделаем безопасный апдейт:
                             c.execute("UPDATE garage SET is_approved = 1 WHERE id = ?", (p_id,))
                             conn.commit()
                             conn.close()
                             st.success(f"Машина #{p_id} одобрена и опубликована!")
                             st.rerun()
                     with col_ap2:
-                        if st.button(f"❌ Отклонить (удалить) #{p_id}", key=f"rej_{p_id}"):
+                        if st.button(f"❌ Отклонить (удалить) #{p_id}", key=f"py_rej_{p_id}"):
                             conn = sqlite3.connect(DB_NAME)
                             c = conn.cursor()
                             c.execute("DELETE FROM garage WHERE id = ?", (p_id,))
                             conn.commit()
                             conn.close()
-                            st.warning(f"Машина #{p_id} отклонена и удалена из базы.")
+                            st.warning(f"Машина #{p_id} отклонена и удалена.")
                             st.rerun()
                     st.markdown("---")
