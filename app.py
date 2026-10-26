@@ -4,6 +4,7 @@ import pandas as pd
 import re
 import random
 import time
+import base64
 
 st.set_page_config(page_title="Portal BeamNG RP", page_icon="🏎️", layout="wide")
 
@@ -11,51 +12,106 @@ DB_NAME = "beamng_rp.db"
 ADMIN_PASSWORD = st.secrets.get("admin_password", "1234")
 FIXED_SCRAP_PAYOUT = 800
 
-# Кислотные, безумные и психоделические CSS-эффекты для легендарных машин
+# Абсолютно ебанутые, кислотные и психоделические стили для легендарных машин
 st.markdown("""
 <style>
-@keyframes crazyPsychoGlow {
-    0% { border-color: #ff0055; box-shadow: 0 0 25px #ff0055, inset 0 0 15px #ff0055; transform: scale(1); }
-    25% { border-color: #00ffcc; box-shadow: 0 0 35px #00ffcc, inset 0 0 25px #00ffcc; transform: scale(1.01); }
-    50% { border-color: #ffcc00; box-shadow: 0 0 30px #ffcc00, inset 0 0 20px #ffcc00; transform: scale(1); }
-    75% { border-color: #9900ff; box-shadow: 0 0 40px #9900ff, inset 0 0 30px #9900ff; transform: scale(1.01); }
-    100% { border-color: #ff0055; box-shadow: 0 0 25px #ff0055, inset 0 0 15px #ff0055; transform: scale(1); }
+@keyframes psychoFlash {
+    0% { border-color: #ff0055; box-shadow: 0 0 35px #ff0055, inset 0 0 25px #ff0055; filter: hue-rotate(0deg); }
+    33% { border-color: #00ffcc; box-shadow: 0 0 45px #00ffcc, inset 0 0 35px #00ffcc; }
+    66% { border-color: #ffff00; box-shadow: 0 0 40px #ffff00, inset 0 0 30px #ffff00; }
+    100% { border-color: #ff00ff; box-shadow: 0 0 55px #ff00ff, inset 0 0 40px #ff00ff; filter: hue-rotate(360deg); }
 }
 
-@keyframes rainbowTextFast {
-    0% { filter: hue-rotate(0deg); }
-    100% { filter: hue-rotate(360deg); }
+@keyframes textGlitch {
+    0% { text-shadow: 3px 3px #ff0055, -3px -3px #00ffcc; }
+    50% { text-shadow: -4px 3px #ffff00, 4px -3px #9900ff; }
+    100% { text-shadow: 3px -3px #ff0055, -3px 3px #00ffcc; }
 }
 
-.crazy-legendary-card {
-    border: 4px dashed #ff0055;
-    border-radius: 15px;
-    padding: 18px;
-    background: radial-gradient(circle, rgba(30,0,50,0.95) 0%, rgba(5,5,15,0.98) 100%);
-    animation: crazyPsychoGlow 1.5s infinite alternate ease-in-out;
-    margin-bottom: 25px;
+.psycho-legendary-card {
+    border: 4px solid #ff0055;
+    border-radius: 16px;
+    padding: 15px;
+    background: linear-gradient(135deg, #1a002c 0%, #0a0a16 50%, #200010 100%);
+    animation: psychoFlash 1.2s infinite alternate ease-in-out;
+    margin-bottom: 10px;
+    position: relative;
+    overflow: hidden;
 }
 
-.crazy-legendary-title {
-    background: linear-gradient(45deg, #ff0000, #ff7700, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
-    background-size: 400% 400%;
+.car-title-legendary {
+    font-size: 22px;
+    font-weight: 900;
+    text-align: center;
+    background: linear-gradient(90deg, #ff0055, #00ffcc, #ffff00, #ff00ff, #ff0055);
+    background-size: 300% 300%;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    animation: rainbowTextFast 2s linear infinite, goldText 3s ease infinite;
-    font-weight: 900 !important;
-    font-size: 26px !important;
+    animation: textGlitch 0.4s infinite, goldText 2s linear infinite;
+    margin-bottom: 8px;
     text-transform: uppercase;
+}
+
+.legendary-badge {
+    background: linear-gradient(90deg, #ff0055, #9900ff);
+    color: white;
     text-align: center;
-    letter-spacing: 2px;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 5px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    letter-spacing: 1px;
+    box-shadow: 0 0 15px #ff0055;
+    text-transform: uppercase;
 }
 
 .rare-card {
     border: 2px solid #00bfff;
-    border-radius: 10px;
-    padding: 12px;
-    box-shadow: 0 0 12px rgba(0, 191, 255, 0.6);
-    background: rgba(10, 25, 40, 0.85);
-    margin-bottom: 20px;
+    border-radius: 12px;
+    padding: 15px;
+    background: rgba(10, 25, 40, 0.9);
+    box-shadow: 0 0 15px rgba(0, 191, 255, 0.4);
+    margin-bottom: 10px;
+}
+
+.car-title-rare {
+    font-size: 20px;
+    font-weight: bold;
+    text-align: center;
+    color: #00bfff;
+    margin-bottom: 8px;
+}
+
+.normal-card {
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 15px;
+    background: rgba(20, 20, 20, 0.8);
+    margin-bottom: 10px;
+}
+
+.car-title-normal {
+    font-size: 20px;
+    font-weight: bold;
+    text-align: center;
+    color: #fff;
+    margin-bottom: 8px;
+}
+
+.car-img {
+    width: 100%;
+    height: 170px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.2);
+    margin-bottom: 10px;
+}
+
+.car-info {
+    text-align: center;
+    color: #ccc;
+    font-size: 14px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -80,30 +136,13 @@ def init_db():
                   is_approved INTEGER DEFAULT 0,
                   rarity TEXT DEFAULT 'Обычная')''')
     
-    try:
-        c.execute("ALTER TABLE users ADD COLUMN password TEXT")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        c.execute("ALTER TABLE garage ADD COLUMN price INTEGER DEFAULT 0")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        c.execute("ALTER TABLE garage ADD COLUMN is_for_sale INTEGER DEFAULT 0")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        c.execute("ALTER TABLE garage ADD COLUMN is_approved INTEGER DEFAULT 0")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        c.execute("ALTER TABLE garage ADD COLUMN photo_data BLOB")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        c.execute("ALTER TABLE garage ADD COLUMN rarity TEXT DEFAULT 'Обычная'")
-    except sqlite3.OperationalError:
-        pass
+    for col, definition in [('password', 'TEXT'), ('price', 'INTEGER DEFAULT 0'), 
+                            ('is_for_sale', 'INTEGER DEFAULT 0'), ('is_approved', 'INTEGER DEFAULT 0'), 
+                            ('photo_data', 'BLOB'), ('rarity', "TEXT DEFAULT 'Обычная'")]:
+        try:
+            c.execute(f"ALTER TABLE garage ADD COLUMN {col} {definition}")
+        except sqlite3.OperationalError:
+            pass
 
     conn.commit()
     conn.close()
@@ -187,19 +226,43 @@ page = st.sidebar.radio("Разделы", [
     "👑 Панель Администратора"
 ])
 
-def render_car_image(photo_data, photo_url):
+def render_car_card_html(name, photo_data, photo_url, owner, rarity):
+    img_html = ""
     if photo_data:
-        try:
-            st.image(photo_data, use_container_width=True)
-            return
-        except Exception:
-            pass
-    if photo_url:
-        fixed_photo = fn_fix_image_url(photo_url)
-        try:
-            st.image(fixed_photo, use_container_width=True)
-        except Exception:
-            st.warning("Не удалось загрузить фото.")
+        b64 = base64.b64encode(photo_data).decode()
+        img_html = f'<img src="data:image/png;base64,{b64}" class="car-img">'
+    elif photo_url:
+        fixed_url = fn_fix_image_url(photo_url)
+        img_html = f'<img src="{fixed_url}" class="car-img">'
+    else:
+        img_html = '<div style="height:150px; display:flex; align-items:center; justify-content:center; color:#777; background:#111; border-radius:8px; margin-bottom:10px;">Нет изображения</div>'
+
+    if rarity == "🔥 Легендарная":
+        card_html = f"""
+        <div class="psycho-legendary-card">
+            <div class="car-title-legendary">⚡ {name} ⚡</div>
+            <div class="legendary-badge">🔥 Абсолютный психо-эксклюзив 🔥</div>
+            {img_html}
+            <div class="car-info">👤 Владелец: <b>{owner}</b></div>
+        </div>
+        """
+    elif rarity == "💎 Редкая":
+        card_html = f"""
+        <div class="rare-card">
+            <div class="car-title-rare">💎 {name}</div>
+            {img_html}
+            <div class="car-info">👤 Владелец: <b>{owner}</b></div>
+        </div>
+        """
+    else:
+        card_html = f"""
+        <div class="normal-card">
+            <div class="car-title-normal">{name}</div>
+            {img_html}
+            <div class="car-info">👤 Владелец: <b>{owner}</b></div>
+        </div>
+        """
+    st.markdown(card_html, unsafe_allow_html=True)
 
 # --- 1. ОБЩИЙ ГАРАЖ ---
 if page == "🏎️ Общий Гараж":
@@ -222,15 +285,7 @@ if page == "🏎️ Общий Гараж":
             col = cols[idx % 3]
             
             with col:
-                if rarity == "🔥 Легендарная":
-                    st.markdown(f'<div class="crazy-legendary-card"><div class="crazy-legendary-title">⚡ {name} ⚡</div><p style="color: #ff0055; text-align:center; font-weight:bold;">🔥 АБСОЛЮТНЫЙ ЛЕГЕНДАРНЫЙ ЭКСЛЮЗИВ 🔥</p>', unsafe_allow_html=True)
-                elif rarity == "💎 Редкая":
-                    st.markdown(f'<div class="rare-card"><h3>💎 {name}</h3><p style="color: #00bfff;">РЕДКИЙ АВТОМОБИЛЬ</p>', unsafe_allow_html=True)
-                else:
-                    st.subheader(name)
-                
-                render_car_image(photo_data, photo_url)
-                st.caption(f"👤 Владелец: **{owner}**")
+                render_car_card_html(name, photo_data, photo_url, owner, rarity)
                 
                 if is_for_sale:
                     st.warning(f"🏷️ ПРОДАЕТСЯ НА РЫНКЕ: **${price}**")
@@ -245,9 +300,6 @@ if page == "🏎️ Общий Гараж":
                     mime="text/plain",
                     key=f"dl_gen_{car_id}"
                 )
-                
-                if rarity in ["🔥 Легендарная", "💎 Редкая"]:
-                    st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown("---")
 
 # --- 2. АВТОРЫНОК ---
@@ -271,15 +323,7 @@ elif page == "🏷️ Авторынок":
             col = cols[idx % 3]
             
             with col:
-                if rarity == "🔥 Легендарная":
-                    st.markdown(f'<div class="crazy-legendary-card"><div class="crazy-legendary-title">⚡ {name} ⚡</div><p style="color: #ff0055; text-align:center; font-weight:bold;">🔥 ЛЕГЕНДАРНЫЙ ЛОТ 🔥</p>', unsafe_allow_html=True)
-                elif rarity == "💎 Редкая":
-                    st.markdown(f'<div class="rare-card"><h3>💎 {name}</h3><p style="color: #00bfff;">РЕДКИЙ ЛОТ</p>', unsafe_allow_html=True)
-                else:
-                    st.subheader(name)
-
-                render_car_image(photo_data, photo_url)
-                st.caption(f"👤 Продавец: **{owner}**")
+                render_car_card_html(name, photo_data, photo_url, owner, rarity)
                 st.warning(f"💵 Цена: **${price}**")
 
                 st.markdown(f"🔗 [Скачать мод]({mod_link})")
@@ -291,7 +335,6 @@ elif page == "🏷️ Авторынок":
                     key=f"dl_market_{car_id}"
                 )
 
-                st.markdown("---")
                 if st.session_state.logged_user:
                     if st.session_state.logged_user == owner:
                         st.info("Это ваша машина.")
@@ -316,9 +359,6 @@ elif page == "🏷️ Авторынок":
                                 conn.close()
                 else:
                     st.warning("⚠️ Войдите в аккаунт, чтобы купить машину.")
-                
-                if rarity in ["🔥 Легендарная", "💎 Редкая"]:
-                    st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown("---")
 
 # --- 3. МОЙ ГАРАЖ ---
@@ -344,19 +384,12 @@ elif page == "🅿️ Мой Гараж":
             for car in my_cars:
                 car_id, name, mod_link, pc_filename, pc_data, photo_url, photo_data, price, is_for_sale, is_approved, rarity = car
                 
-                expander_label = f"🔥 {name} (ID: {car_id}) [ЛЕГЕНДАРНАЯ]" if rarity == "🔥 Легендарная" else f"🚘 {name} (ID: {car_id})"
-                with st.expander(expander_label):
+                exp_label = f"🔥 {name} (ID: {car_id}) [ЛЕГЕНДАРНАЯ]" if rarity == "🔥 Легендарная" else f"🚘 {name} (ID: {car_id})"
+                with st.expander(exp_label):
                     col_img, col_info = st.columns([1, 2])
                     with col_img:
-                        if rarity == "🔥 Легендарная":
-                            st.markdown('<div class="crazy-legendary-card" style="padding:5px;">', unsafe_allow_html=True)
-                        render_car_image(photo_data, photo_url)
-                        if rarity == "🔥 Легендарная":
-                            st.markdown('</div>', unsafe_allow_html=True)
+                        render_car_card_html(name, photo_data, photo_url, current_user, rarity)
                     with col_info:
-                        if rarity == "🔥 Легендарная":
-                            st.markdown('<p style="color: #ff0055; font-weight:bold;">⚡ СТАТУС: ЛЕГЕНДАРНЫЙ ЭКСЛЮЗИВ ⚡</p>', unsafe_allow_html=True)
-                        
                         if is_approved == 0:
                             st.error("⏳ Статус: На модерации у администратора")
                         else:
@@ -411,7 +444,6 @@ elif page == "👤 Профиль":
         total_cars = car_stats[0] if car_stats else 0
         approved_cars = car_stats[1] if car_stats else 0
 
-        # Карточка профиля
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #1e1e2f, #111118); padding: 25px; border-radius: 15px; border: 2px solid #4f46e5; box-shadow: 0 0 15px rgba(79, 70, 229, 0.4); margin-bottom: 25px;">
             <h2 style="margin-top: 0; color: #818cf8;">👤 Игрок: {current_user}</h2>
@@ -740,7 +772,7 @@ elif page == "👑 Панель Администратора":
                             key=f"dl_pending_{p_id}"
                         )
                     
-                    render_car_image(p_photo_data, p_photo)
+                    render_car_card_html(p_name, p_photo_data, p_photo, p_owner, "Обычная")
                     
                     col_ap1, col_ap2 = st.columns(2)
                     with col_ap1:
