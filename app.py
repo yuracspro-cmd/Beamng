@@ -5,11 +5,60 @@ import re
 import random
 import time
 
-st.set_page_config(page_title="Портал BeamNG RP", page_icon="🏎️", layout="wide")
+st.set_page_config(page_title="Portal BeamNG RP", page_icon="🏎️", layout="wide")
 
 DB_NAME = "beamng_rp.db"
 ADMIN_PASSWORD = st.secrets.get("admin_password", "1234")
 FIXED_SCRAP_PAYOUT = 800
+
+# Кислотные, безумные и психоделические CSS-эффекты для легендарных машин
+st.markdown("""
+<style>
+@keyframes crazyPsychoGlow {
+    0% { border-color: #ff0055; box-shadow: 0 0 25px #ff0055, inset 0 0 15px #ff0055; transform: scale(1); }
+    25% { border-color: #00ffcc; box-shadow: 0 0 35px #00ffcc, inset 0 0 25px #00ffcc; transform: scale(1.01); }
+    50% { border-color: #ffcc00; box-shadow: 0 0 30px #ffcc00, inset 0 0 20px #ffcc00; transform: scale(1); }
+    75% { border-color: #9900ff; box-shadow: 0 0 40px #9900ff, inset 0 0 30px #9900ff; transform: scale(1.01); }
+    100% { border-color: #ff0055; box-shadow: 0 0 25px #ff0055, inset 0 0 15px #ff0055; transform: scale(1); }
+}
+
+@keyframes rainbowTextFast {
+    0% { filter: hue-rotate(0deg); }
+    100% { filter: hue-rotate(360deg); }
+}
+
+.crazy-legendary-card {
+    border: 4px dashed #ff0055;
+    border-radius: 15px;
+    padding: 18px;
+    background: radial-gradient(circle, rgba(30,0,50,0.95) 0%, rgba(5,5,15,0.98) 100%);
+    animation: crazyPsychoGlow 1.5s infinite alternate ease-in-out;
+    margin-bottom: 25px;
+}
+
+.crazy-legendary-title {
+    background: linear-gradient(45deg, #ff0000, #ff7700, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+    background-size: 400% 400%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: rainbowTextFast 2s linear infinite, goldText 3s ease infinite;
+    font-weight: 900 !important;
+    font-size: 26px !important;
+    text-transform: uppercase;
+    text-align: center;
+    letter-spacing: 2px;
+}
+
+.rare-card {
+    border: 2px solid #00bfff;
+    border-radius: 10px;
+    padding: 12px;
+    box-shadow: 0 0 12px rgba(0, 191, 255, 0.6);
+    background: rgba(10, 25, 40, 0.85);
+    margin-bottom: 20px;
+}
+</style>
+""", unsafe_allow_html=True)
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -28,7 +77,8 @@ def init_db():
                   owner TEXT, 
                   price INTEGER DEFAULT 0, 
                   is_for_sale INTEGER DEFAULT 0,
-                  is_approved INTEGER DEFAULT 0)''')
+                  is_approved INTEGER DEFAULT 0,
+                  rarity TEXT DEFAULT 'Обычная')''')
     
     try:
         c.execute("ALTER TABLE users ADD COLUMN password TEXT")
@@ -48,6 +98,10 @@ def init_db():
         pass
     try:
         c.execute("ALTER TABLE garage ADD COLUMN photo_data BLOB")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        c.execute("ALTER TABLE garage ADD COLUMN rarity TEXT DEFAULT 'Обычная'")
     except sqlite3.OperationalError:
         pass
 
@@ -125,6 +179,7 @@ page = st.sidebar.radio("Разделы", [
     "🏎️ Общий Гараж", 
     "🏷️ Авторынок",
     "🅿️ Мой Гараж",
+    "👤 Профиль",
     "🎰 Казино",
     "♻️ Свалка (Утилизация)",
     "💰 Игроки и Балансы", 
@@ -153,7 +208,7 @@ if page == "🏎️ Общий Гараж":
 
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("""SELECT id, car_name, mod_link, pc_filename, pc_data, photo_url, photo_data, owner, price, is_for_sale 
+    c.execute("""SELECT id, car_name, mod_link, pc_filename, pc_data, photo_url, photo_data, owner, price, is_for_sale, rarity 
                  FROM garage WHERE is_approved = 1""")
     cars = c.fetchall()
     conn.close()
@@ -163,13 +218,18 @@ if page == "🏎️ Общий Гараж":
     else:
         cols = st.columns(3)
         for idx, car in enumerate(cars):
-            car_id, name, mod_link, pc_filename, pc_data, photo_url, photo_data, owner, price, is_for_sale = car
+            car_id, name, mod_link, pc_filename, pc_data, photo_url, photo_data, owner, price, is_for_sale, rarity = car
             col = cols[idx % 3]
             
             with col:
-                st.subheader(name)
-                render_car_image(photo_data, photo_url)
+                if rarity == "🔥 Легендарная":
+                    st.markdown(f'<div class="crazy-legendary-card"><div class="crazy-legendary-title">⚡ {name} ⚡</div><p style="color: #ff0055; text-align:center; font-weight:bold;">🔥 АБСОЛЮТНЫЙ ЛЕГЕНДАРНЫЙ ЭКСЛЮЗИВ 🔥</p>', unsafe_allow_html=True)
+                elif rarity == "💎 Редкая":
+                    st.markdown(f'<div class="rare-card"><h3>💎 {name}</h3><p style="color: #00bfff;">РЕДКИЙ АВТОМОБИЛЬ</p>', unsafe_allow_html=True)
+                else:
+                    st.subheader(name)
                 
+                render_car_image(photo_data, photo_url)
                 st.caption(f"👤 Владелец: **{owner}**")
                 
                 if is_for_sale:
@@ -185,6 +245,9 @@ if page == "🏎️ Общий Гараж":
                     mime="text/plain",
                     key=f"dl_gen_{car_id}"
                 )
+                
+                if rarity in ["🔥 Легендарная", "💎 Редкая"]:
+                    st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown("---")
 
 # --- 2. АВТОРЫНОК ---
@@ -194,7 +257,7 @@ elif page == "🏷️ Авторынок":
 
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("""SELECT id, car_name, mod_link, pc_filename, pc_data, photo_url, photo_data, owner, price 
+    c.execute("""SELECT id, car_name, mod_link, pc_filename, pc_data, photo_url, photo_data, owner, price, rarity 
                  FROM garage WHERE is_approved = 1 AND is_for_sale = 1""")
     cars = c.fetchall()
     conn.close()
@@ -204,13 +267,18 @@ elif page == "🏷️ Авторынок":
     else:
         cols = st.columns(3)
         for idx, car in enumerate(cars):
-            car_id, name, mod_link, pc_filename, pc_data, photo_url, photo_data, owner, price = car
+            car_id, name, mod_link, pc_filename, pc_data, photo_url, photo_data, owner, price, rarity = car
             col = cols[idx % 3]
             
             with col:
-                st.subheader(name)
+                if rarity == "🔥 Легендарная":
+                    st.markdown(f'<div class="crazy-legendary-card"><div class="crazy-legendary-title">⚡ {name} ⚡</div><p style="color: #ff0055; text-align:center; font-weight:bold;">🔥 ЛЕГЕНДАРНЫЙ ЛОТ 🔥</p>', unsafe_allow_html=True)
+                elif rarity == "💎 Редкая":
+                    st.markdown(f'<div class="rare-card"><h3>💎 {name}</h3><p style="color: #00bfff;">РЕДКИЙ ЛОТ</p>', unsafe_allow_html=True)
+                else:
+                    st.subheader(name)
+
                 render_car_image(photo_data, photo_url)
-                
                 st.caption(f"👤 Продавец: **{owner}**")
                 st.warning(f"💵 Цена: **${price}**")
 
@@ -248,6 +316,9 @@ elif page == "🏷️ Авторынок":
                                 conn.close()
                 else:
                     st.warning("⚠️ Войдите в аккаунт, чтобы купить машину.")
+                
+                if rarity in ["🔥 Легендарная", "💎 Редкая"]:
+                    st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown("---")
 
 # --- 3. МОЙ ГАРАЖ ---
@@ -262,7 +333,7 @@ elif page == "🅿️ Мой Гараж":
 
         conn = sqlite3.connect(DB_NAME)
         c = conn.cursor()
-        c.execute("""SELECT id, car_name, mod_link, pc_filename, pc_data, photo_url, photo_data, price, is_for_sale, is_approved 
+        c.execute("""SELECT id, car_name, mod_link, pc_filename, pc_data, photo_url, photo_data, price, is_for_sale, is_approved, rarity 
                      FROM garage WHERE owner = ?""", (current_user,))
         my_cars = c.fetchall()
         conn.close()
@@ -271,13 +342,21 @@ elif page == "🅿️ Мой Гараж":
             st.info("У вас пока нет добавленных машин в гараже.")
         else:
             for car in my_cars:
-                car_id, name, mod_link, pc_filename, pc_data, photo_url, photo_data, price, is_for_sale, is_approved = car
+                car_id, name, mod_link, pc_filename, pc_data, photo_url, photo_data, price, is_for_sale, is_approved, rarity = car
                 
-                with st.expander(f"🚘 {name} (ID: {car_id})"):
+                expander_label = f"🔥 {name} (ID: {car_id}) [ЛЕГЕНДАРНАЯ]" if rarity == "🔥 Легендарная" else f"🚘 {name} (ID: {car_id})"
+                with st.expander(expander_label):
                     col_img, col_info = st.columns([1, 2])
                     with col_img:
+                        if rarity == "🔥 Легендарная":
+                            st.markdown('<div class="crazy-legendary-card" style="padding:5px;">', unsafe_allow_html=True)
                         render_car_image(photo_data, photo_url)
+                        if rarity == "🔥 Легендарная":
+                            st.markdown('</div>', unsafe_allow_html=True)
                     with col_info:
+                        if rarity == "🔥 Легендарная":
+                            st.markdown('<p style="color: #ff0055; font-weight:bold;">⚡ СТАТУС: ЛЕГЕНДАРНЫЙ ЭКСЛЮЗИВ ⚡</p>', unsafe_allow_html=True)
+                        
                         if is_approved == 0:
                             st.error("⏳ Статус: На модерации у администратора")
                         else:
@@ -309,7 +388,54 @@ elif page == "🅿️ Мой Гараж":
                                 st.success("Настройки успешно обновлены!")
                                 st.rerun()
 
-# --- 4. КАЗИНО (ИСПРАВЛЕННОЕ И НАДЕЖНОЕ) ---
+# --- 4. ПРОФИЛЬ ---
+elif page == "👤 Профиль":
+    st.title("👤 Профиль игрока")
+    
+    if not st.session_state.logged_user:
+        st.warning("⚠️ Пожалуйста, войдите в аккаунт через боковую панель, чтобы просмотреть профиль.")
+    else:
+        current_user = st.session_state.logged_user
+        
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute("SELECT balance, job FROM users WHERE username = ?", (current_user,))
+        user_info = c.fetchone()
+        
+        c.execute("SELECT COUNT(*), SUM(CASE WHEN is_approved=1 THEN 1 ELSE 0 END) FROM garage WHERE owner = ?", (current_user,))
+        car_stats = c.fetchone()
+        conn.close()
+        
+        balance = user_info[0] if user_info else 0
+        job = user_info[1] if user_info else "Безработный"
+        total_cars = car_stats[0] if car_stats else 0
+        approved_cars = car_stats[1] if car_stats else 0
+
+        # Карточка профиля
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #1e1e2f, #111118); padding: 25px; border-radius: 15px; border: 2px solid #4f46e5; box-shadow: 0 0 15px rgba(79, 70, 229, 0.4); margin-bottom: 25px;">
+            <h2 style="margin-top: 0; color: #818cf8;">👤 Игрок: {current_user}</h2>
+            <hr style="border-color: #374151;">
+            <p style="font-size: 18px;">💰 <b>Баланс:</b> <span style="color: #34d399;">${balance}</span></p>
+            <p style="font-size: 18px;">💼 <b>Работа:</b> <span style="color: #fbbf24;">{job}</span></p>
+            <p style="font-size: 18px;">🚘 <b>Всего машин в гараже:</b> {total_cars} (Одобрено: {approved_cars})</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.subheader("🚗 Ваши автомобили")
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute("SELECT id, car_name, price, is_for_sale, is_approved, rarity FROM garage WHERE owner = ?", (current_user,))
+        my_profile_cars = c.fetchall()
+        conn.close()
+
+        if not my_profile_cars:
+            st.info("У вас пока нет добавленных автомобилей.")
+        else:
+            df_profile = pd.DataFrame(my_profile_cars, columns=["ID", "Название", "Цена ($)", "На рынке", "Одобрено", "Редкость"])
+            st.dataframe(df_profile, use_container_width=True)
+
+# --- 5. КАЗИНО ---
 elif page == "🎰 Казино":
     st.title("🎰 Городское Казино (Рулетка)")
     
@@ -344,7 +470,6 @@ elif page == "🎰 Казино":
                 if user_balance < bet_amount:
                     st.error("Недостаточно денег на балансе!")
                 else:
-                    # Плавная анимация прокрутки рулетки через нативный статус ожидания
                     with st.spinner("🎲 Рулетка вращается, шарик прыгает по лункам..."):
                         time.sleep(2.5)
                     
@@ -385,7 +510,7 @@ elif page == "🎰 Казино":
             else:
                 st.info("👈 Настройте ставку слева и нажмите **«Вращать рулетку»**.")
 
-# --- 5. СВАЛКА (УТИЛИЗАЦИЯ) ---
+# --- 6. СВАЛКА (УТИЛИЗАЦИЯ) ---
 elif page == "♻️ Свалка (Утилизация)":
     st.title("♻️ Мгновенная утилизация авто")
     st.write(f"Сдайте свою машину на свалку! Фиксированная компенсация за утилизацию составляет **${FIXED_SCRAP_PAYOUT}**.")
@@ -421,7 +546,7 @@ elif page == "♻️ Свалка (Утилизация)":
                         st.success(f"Машина утилизирована! Вы получили ${scrap_value}.")
                         st.rerun()
 
-# --- 6. ИГРОКИ И БАЛАНСЫ ---
+# --- 7. ИГРОКИ И БАЛАНСЫ ---
 elif page == "💰 Игроки и Балансы":
     st.title("💰 Экономика и Список Игроков")
     conn = sqlite3.connect(DB_NAME)
@@ -433,7 +558,7 @@ elif page == "💰 Игроки и Балансы":
     else:
         st.dataframe(df, use_container_width=True)
 
-# --- 7. ДОБАВИТЬ МАШИНУ ---
+# --- 8. ДОБАВИТЬ МАШИНУ ---
 elif page == "➕ Добавить машину":
     st.title("➕ Добавление автомобиля")
     
@@ -462,8 +587,8 @@ elif page == "➕ Добавить машину":
                     conn = sqlite3.connect(DB_NAME)
                     c = conn.cursor()
                     c.execute("""INSERT INTO garage 
-                                 (car_name, mod_link, pc_filename, pc_data, photo_url, photo_data, owner, price, is_for_sale, is_approved) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+                                 (car_name, mod_link, pc_filename, pc_data, photo_url, photo_data, owner, price, is_for_sale, is_approved, rarity) 
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'Обычная')""",
                               (car_name, mod_link, uploaded_pc.name, pc_bytes, "", photo_bytes, st.session_state.logged_user, price if is_for_sale else 0, 1 if is_for_sale else 0))
                     conn.commit()
                     conn.close()
@@ -471,7 +596,7 @@ elif page == "➕ Добавить машину":
                 else:
                     st.error("Заполните название, ссылку на мод и загрузите .pc файл!")
 
-# --- 8. ПАНЕЛЬ АДМИНИСТРАТОРА ---
+# --- 9. ПАНЕЛЬ АДМИНИСТРАТОРА ---
 elif page == "👑 Панель Администратора":
     st.title("👑 Управление Сервером (Админ)")
     
@@ -531,7 +656,7 @@ elif page == "👑 Панель Администратора":
                         st.rerun()
 
         with tab2:
-            st.subheader("Редактирование машин в базе")
+            st.subheader("Редактирование машин в базе (включая редкость)")
             conn = sqlite3.connect(DB_NAME)
             c = conn.cursor()
             c.execute("SELECT id, car_name, owner, price, is_for_sale FROM garage")
@@ -547,7 +672,7 @@ elif page == "👑 Панель Администратора":
 
                 conn = sqlite3.connect(DB_NAME)
                 c = conn.cursor()
-                c.execute("SELECT car_name, mod_link, photo_url, owner, price, is_for_sale FROM garage WHERE id = ?", (selected_car_id,))
+                c.execute("SELECT car_name, mod_link, photo_url, owner, price, is_for_sale, rarity FROM garage WHERE id = ?", (selected_car_id,))
                 edit_car = c.fetchone()
                 conn.close()
 
@@ -559,6 +684,10 @@ elif page == "👑 Панель Администратора":
                         new_owner = st.text_input("Владелец", value=edit_car[3])
                         new_price = st.number_input("Цена ($)", value=edit_car[4], step=100)
                         new_sale = st.checkbox("На продаже (Авторынок)", value=bool(edit_car[5]))
+                        
+                        rarity_options = ["Обычная", "💎 Редкая", "🔥 Легендарная"]
+                        current_rarity = edit_car[6] if edit_car[6] in rarity_options else "Обычная"
+                        new_rarity = st.selectbox("Редкость / Эффект авто", rarity_options, index=rarity_options.index(current_rarity))
 
                         col_save, col_del = st.columns(2)
                         with col_save:
@@ -568,9 +697,9 @@ elif page == "👑 Панель Администратора":
                             conn = sqlite3.connect(DB_NAME)
                             c = conn.cursor()
                             c.execute("""UPDATE garage SET 
-                                         car_name=?, mod_link=?, photo_url=?, owner=?, price=?, is_for_sale=? 
+                                         car_name=?, mod_link=?, photo_url=?, owner=?, price=?, is_for_sale=?, rarity=? 
                                          WHERE id=?""",
-                                      (new_name, new_mod, new_photo, new_owner, new_price, 1 if new_sale else 0, selected_car_id))
+                                      (new_name, new_mod, new_photo, new_owner, new_price, 1 if new_sale else 0, new_rarity, selected_car_id))
                             conn.commit()
                             conn.close()
                             st.success("Машина успешно отредактирована!")
