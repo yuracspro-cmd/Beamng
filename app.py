@@ -2,14 +2,13 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 import re
+import random
 
 st.set_page_config(page_title="Портал BeamNG RP", page_icon="🏎️", layout="wide")
 
 DB_NAME = "beamng_rp.db"
 ADMIN_PASSWORD = st.secrets.get("admin_password", "1234")
-
-# Фиксированная выплата свалки за любую утилизированную машину (не зависит от рынка!)
-FIXED_SCRAP_PAYOUT = 800 
+FIXED_SCRAP_PAYOUT = 800  # Фиксированная выплата свалки (защита от накрутки)
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -125,6 +124,7 @@ page = st.sidebar.radio("Разделы", [
     "🏎️ Общий Гараж", 
     "🏷️ Авторынок",
     "🅿️ Мой Гараж",
+    "🎰 Казино",
     "♻️ Свалка (Утилизация)",
     "💰 Игроки и Балансы", 
     "➕ Добавить машину", 
@@ -308,10 +308,92 @@ elif page == "🅿️ Мой Гараж":
                                 st.success("Настройки успешно обновлены!")
                                 st.rerun()
 
-# --- 4. СВАЛКА (УТИЛИЗАЦИЯ С ФИКСИРОВАННОЙ ВЫПЛАТОЙ) ---
+# --- 4. КАЗИНО ---
+elif page == "🎰 Казино":
+    st.title("🎰 Городское Казино")
+    st.write("Испытайте удачу в нашей рулетке! Сделайте ставку на цвет или точное число.")
+
+    if not st.session_state.logged_user:
+        st.warning("⚠️ Пожалуйста, войдите в аккаунт в боковой панели, чтобы играть в казино.")
+    else:
+        current_user = st.session_state.logged_user
+        
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute("SELECT balance FROM users WHERE username = ?", (current_user,))
+        user_row = c.fetchone()
+        user_balance = user_row[0] if user_row else 0
+        conn.close()
+
+        st.info(f"Ваш текущий баланс: **${user_balance}**")
+
+        tab_color, tab_number = st.tabs(["🔴 / ⚫ Ставка на цвет (x2)", "🎯 Ставка на число (x35)"])
+
+        with tab_color:
+            bet_color_amount = st.number_input("Сумма ставки ($)", min_value=10, max_value=max(10, user_balance), value=50, step=10, key="bet_c")
+            color_choice = st.radio("Выберите цвет:", ["Красное", "Черное"])
+
+            if st.button("🎰 Крутить рулетку (Цвет)"):
+                if user_balance < bet_color_amount:
+                    st.error("Недостаточно денег на балансе!")
+                else:
+                    winning_number = random.randint(0, 36)
+                    if winning_number == 0:
+                        winning_color = "Зеленое"
+                    elif winning_number % 2 == 0:
+                        winning_color = "Красное"
+                    else:
+                        winning_color = "Черное"
+
+                    st.write(f"Выпало число: **{winning_number} ({winning_color})**")
+
+                    conn = sqlite3.connect(DB_NAME)
+                    c = conn.cursor()
+                    if color_choice == winning_color:
+                        new_balance = user_balance + bet_color_amount
+                        c.execute("UPDATE users SET balance = ? WHERE username = ?", (new_balance, current_user))
+                        conn.commit()
+                        st.success(f"Победа! Вы выиграли ${bet_color_amount}! Новый баланс: ${new_balance}")
+                    else:
+                        new_balance = user_balance - bet_color_amount
+                        c.execute("UPDATE users SET balance = ? WHERE username = ?", (new_balance, current_user))
+                        conn.commit()
+                        st.error(f"Проигрыш! Вы потеряли ${bet_color_amount}. Новый баланс: ${new_balance}")
+                    conn.close()
+                    st.rerun()
+
+        with tab_number:
+            bet_num_amount = st.number_input("Сумма ставки ($)", min_value=10, max_value=max(10, user_balance), value=50, step=10, key="bet_n")
+            number_choice = st.slider("Выберите число от 0 до 36:", 0, 36, 7)
+
+            if st.button("🎯 Крутить рулетку (Число)"):
+                if user_balance < bet_num_amount:
+                    st.error("Недостаточно денег на балансе!")
+                else:
+                    winning_number = random.randint(0, 36)
+                    st.write(f"Выпало число: **{winning_number}**")
+
+                    conn = sqlite3.connect(DB_NAME)
+                    c = conn.cursor()
+                    if number_choice == winning_number:
+                        win_prize = bet_num_amount * 35
+                        new_balance = user_balance + win_prize
+                        c.execute("UPDATE users SET balance = ? WHERE username = ?", (new_balance, current_user))
+                        conn.commit()
+                        st.balloons()
+                        st.success(f"ДЖЕКПОТ! Вы угадали число и сорвали куш ${win_prize}!")
+                    else:
+                        new_balance = user_balance - bet_num_amount
+                        c.execute("UPDATE users SET balance = ? WHERE username = ?", (new_balance, current_user))
+                        conn.commit()
+                        st.error(f"Мимо! Вы потеряли ${bet_num_amount}. Новый баланс: ${new_balance}")
+                    conn.close()
+                    st.rerun()
+
+# --- 5. СВАЛКА (УТИЛИЗАЦИЯ) ---
 elif page == "♻️ Свалка (Утилизация)":
     st.title("♻️ Мгновенная утилизация авто")
-    st.write(f"Сдайте свою машину на свалку! Фиксированная государственная компенсация за утилизацию любого авто составляет **${FIXED_SCRAP_PAYOUT}**.")
+    st.write(f"Сдайте свою машину на свалку! Фиксированная компенсация за утилизацию составляет **${FIXED_SCRAP_PAYOUT}**.")
 
     if not st.session_state.logged_user:
         st.warning("⚠️ Пожалуйста, войдите в аккаунт в боковой панели.")
@@ -344,7 +426,7 @@ elif page == "♻️ Свалка (Утилизация)":
                         st.success(f"Машина утилизирована! Вы получили ${scrap_value}.")
                         st.rerun()
 
-# --- 5. ИГРОКИ И БАЛАНСЫ ---
+# --- 6. ИГРОКИ И БАЛАНСЫ ---
 elif page == "💰 Игроки и Балансы":
     st.title("💰 Экономика и Список Игроков")
     conn = sqlite3.connect(DB_NAME)
@@ -356,7 +438,7 @@ elif page == "💰 Игроки и Балансы":
     else:
         st.dataframe(df, use_container_width=True)
 
-# --- 6. ДОБАВИТЬ МАШИНУ ---
+# --- 7. ДОБАВИТЬ МАШИНУ ---
 elif page == "➕ Добавить машину":
     st.title("➕ Добавление автомобиля")
     
@@ -394,7 +476,7 @@ elif page == "➕ Добавить машину":
                 else:
                     st.error("Заполните название, ссылку на мод и загрузите .pc файл!")
 
-# --- 7. ПАНЕЛЬ АДМИНИСТРАТОРА ---
+# --- 8. ПАНЕЛЬ АДМИНИСТРАТОРА ---
 elif page == "👑 Панель Администратора":
     st.title("👑 Управление Сервером (Админ)")
     
