@@ -13,20 +13,29 @@ ADMIN_PASSWORD = st.secrets.get("admin_password", "1234")
 FIXED_SCRAP_PAYOUT = 800
 FEE_PERCENT = 0.03 # 3% комиссия биржи
 
+# Авто-обновление страницы каждые 10 секунд (10000 мс)
+st.markdown("""
+    <script>
+        setTimeout(function(){
+            window.location.reload(1);
+        }, 10000);
+    </script>
+""", unsafe_allow_html=True)
+
 # Аудио-ссылки для казино
 SOUND_SPIN = "https://assets.mixkit.co/active_storage/sfx/2004/2004-preview.mp3"
 SOUND_WIN = "https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3"
 SOUND_LOSE = "https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3"
 
-# Новостной фон для биржи
+# Новостной фон для биржи с жесткими дампами и пампами
 MARKET_NEWS = [
-    ("🚀 Илон Маск опубликовал мем с названием валюты!", 0.25, 0.45),
-    ("⚠️ Крупный крипто-фонд зафиксировал прибыль и продал активы.", -0.30, -0.15),
-    ("🔥 Прошло успешное обновление сети и сжигание монет!", 0.10, 0.20),
-    ("📉 Правительство объявило о возможном запрете анонимных транзакций.", -0.25, -0.10),
-    ("🏛️ Крупный банк добавил монету в список инвестиционных активов.", 0.15, 0.30),
-    ("💀 Хакеры попытались атаковать сеть, но защита выдержала.", -0.10, 0.05),
-    ("📊 Обычный торговый день на бирже, киты манипулируют курсом.", -0.08, 0.08),
+    ("🚀 Илон Маск опубликовал твит про монету!", 0.30, 0.60),
+    ("💀 ВНИМАНИЕ: Крупный кит слил все активы! ДАМП!", -0.70, -0.40),
+    ("⚠️ Крупный крипто-фонд зафиксировал прибыль.", -0.25, -0.10),
+    ("🔥 Прошло успешное сжигание монет! Дефицит на рынке!", 0.20, 0.45),
+    ("📉 Правительство вводит жесткие налоги на крипту.", -0.35, -0.15),
+    ("🏛️ Банк добавил валюту в инвест-портфель.", 0.15, 0.35),
+    ("📊 Обычные торги, манипуляции мелких трейдеров.", -0.05, 0.05),
 ]
 
 def play_audio(url):
@@ -197,7 +206,7 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
-    # Создаем валюту "Введите Текст" по умолчанию
+    # Создаем монету "Введите Текст"
     c.execute("SELECT COUNT(*) FROM crypto_coins")
     if c.fetchone()[0] == 0:
         c.execute("INSERT INTO crypto_coins (symbol, name, price, history, last_news) VALUES (?, ?, ?, ?, ?)", 
@@ -491,10 +500,10 @@ elif page == "🅿️ Мой Гараж":
                                 st.success("Настройки успешно обновлены!")
                                 st.rerun()
 
-# --- 4. БИРЖА (ВВЕДИТЕ ТЕКСТ) ---
+# --- 4. БИРЖА (ВВЕДИТЕ ТЕКСТ) С АВТО-ОБНОВЛЕНИЕМ 10 СЕКУНД ---
 elif page == "📈 Биржа (Введите Текст)":
-    st.title("📈 Биржа Валют и Скачков Рынка")
-    st.write("Зарабатывайте на пампе и дампе! Учитывайте комиссии 3% и новостной фон.")
+    st.title("📈 Живая Криптобиржа (Авто-обновление каждые 10 секунд)")
+    st.caption("🔄 Рынок обновляется автоматически. Учитывайте комиссии 3% и внезапные дампы!")
 
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -511,7 +520,32 @@ elif page == "📈 Биржа (Введите Текст)":
         
         symbol, coin_name, price, history_str, last_news = selected_coin
         history_list = [float(x) for x in history_str.split(",") if x]
-        
+
+        # Автоматическое изменение рынка при тике (раз в 10 секунд)
+        if "last_tick" not in st.session_state:
+            st.session_state.last_tick = time.time()
+
+        if time.time() - st.session_state.last_tick > 10:
+            st.session_state.last_tick = time.time()
+            
+            news_text, min_mult, max_mult = random.choice(MARKET_NEWS)
+            multiplier = 1 + random.uniform(min_mult, max_mult)
+            new_price = max(1.0, round(price * multiplier, 2))
+            
+            history_list.append(new_price)
+            if len(history_list) > 25:
+                history_list.pop(0)
+            
+            new_history_str = ",".join(map(str, history_list))
+            
+            conn = sqlite3.connect(DB_NAME)
+            c = conn.cursor()
+            c.execute("UPDATE crypto_coins SET price = ?, history = ?, last_news = ? WHERE symbol = ?", 
+                      (new_price, new_history_str, news_text, symbol))
+            conn.commit()
+            conn.close()
+            st.rerun()
+
         if not last_news:
             last_news = "На рынке затишье."
 
@@ -535,28 +569,7 @@ elif page == "📈 Биржа (Введите Текст)":
             st.line_chart(df_chart)
 
         with col_m2:
-            st.subheader("⚡ Симуляция скачка")
-            st.caption("Каждый клик имитирует новые события на рынке!")
-            if st.button("📊 Спровоцировать скачок цен"):
-                # Выбираем случайную новость
-                news_text, min_mult, max_mult = random.choice(MARKET_NEWS)
-                multiplier = 1 + random.uniform(min_mult, max_mult)
-                
-                new_price = max(1.0, round(price * multiplier, 2))
-                
-                history_list.append(new_price)
-                if len(history_list) > 25:
-                    history_list.pop(0)
-                
-                new_history_str = ",".join(map(str, history_list))
-                
-                conn = sqlite3.connect(DB_NAME)
-                c = conn.cursor()
-                c.execute("UPDATE crypto_coins SET price = ?, history = ?, last_news = ? WHERE symbol = ?", 
-                          (new_price, new_history_str, news_text, symbol))
-                conn.commit()
-                conn.close()
-                st.rerun()
+            st.info("⏱️ Следующий тик цен произойдет через 10 секунд автоматически.")
 
         st.markdown("---")
         st.subheader("🛒 Торговый Терминал")
