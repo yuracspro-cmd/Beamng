@@ -13,9 +13,7 @@ st.set_page_config(page_title="Portal BeamNG RP", page_icon="🏎️", layout="w
 st_autorefresh(interval=10000, key="crypto_ticker_refresh")
 
 ADMIN_PASSWORD = st.secrets.get("admin_password", "1234")
-DATABASE_URL = st.secrets.get(
-    "DATABASE_URL", ""
-)  дл  # Строка подключения из Secrets
+DATABASE_URL = st.secrets.get("DATABASE_URL", "") # Строка подключения из Secrets
 FIXED_SCRAP_PAYOUT = 800
 FEE_PERCENT = 0.03  # 3% комиссия биржи
 
