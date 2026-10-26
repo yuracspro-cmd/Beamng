@@ -11,8 +11,33 @@ st.set_page_config(page_title="Portal BeamNG RP", page_icon="🏎️", layout="w
 DB_NAME = "beamng_rp.db"
 ADMIN_PASSWORD = st.secrets.get("admin_password", "1234")
 FIXED_SCRAP_PAYOUT = 800
+FEE_PERCENT = 0.03 # 3% комиссия биржи
 
-# Исправленные и выровненные по размеру стили карточек с психо-эффектами
+# Аудио-ссылки для казино
+SOUND_SPIN = "https://assets.mixkit.co/active_storage/sfx/2004/2004-preview.mp3"
+SOUND_WIN = "https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3"
+SOUND_LOSE = "https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3"
+
+# Новостной фон для биржи
+MARKET_NEWS = [
+    ("🚀 Илон Маск опубликовал мем с названием валюты!", 0.25, 0.45),
+    ("⚠️ Крупный крипто-фонд зафиксировал прибыль и продал активы.", -0.30, -0.15),
+    ("🔥 Прошло успешное обновление сети и сжигание монет!", 0.10, 0.20),
+    ("📉 Правительство объявило о возможном запрете анонимных транзакций.", -0.25, -0.10),
+    ("🏛️ Крупный банк добавил монету в список инвестиционных активов.", 0.15, 0.30),
+    ("💀 Хакеры попытались атаковать сеть, но защита выдержала.", -0.10, 0.05),
+    ("📊 Обычный торговый день на бирже, киты манипулируют курсом.", -0.08, 0.08),
+]
+
+def play_audio(url):
+    audio_html = f"""
+        <audio autoplay style="display:none;">
+            <source src="{url}" type="audio/mp3">
+        </audio>
+    """
+    st.markdown(audio_html, unsafe_allow_html=True)
+
+# Стили
 st.markdown("""
 <style>
 @keyframes psychoFlash {
@@ -124,6 +149,14 @@ st.markdown("""
     color: #ccc;
     font-size: 14px;
 }
+
+.news-box {
+    background: rgba(30, 41, 59, 0.8);
+    border-left: 4px solid #38bdf8;
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 15px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -147,6 +180,29 @@ def init_db():
                   is_approved INTEGER DEFAULT 0,
                   rarity TEXT DEFAULT 'Обычная')''')
     
+    # Таблицы для биржи
+    c.execute('''CREATE TABLE IF NOT EXISTS crypto_coins 
+                 (symbol TEXT PRIMARY KEY, name TEXT, price REAL, history TEXT, last_news TEXT)''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS user_crypto 
+                 (username TEXT, symbol TEXT, amount REAL, avg_buy_price REAL DEFAULT 0, PRIMARY KEY (username, symbol))''')
+
+    try:
+        c.execute("ALTER TABLE crypto_coins ADD COLUMN last_news TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        c.execute("ALTER TABLE user_crypto ADD COLUMN avg_buy_price REAL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
+    # Создаем валюту "Введите Текст" по умолчанию
+    c.execute("SELECT COUNT(*) FROM crypto_coins")
+    if c.fetchone()[0] == 0:
+        c.execute("INSERT INTO crypto_coins (symbol, name, price, history, last_news) VALUES (?, ?, ?, ?, ?)", 
+                  ('VVEDI', 'Введите Текст', 100.0, "90,95,98,100", "Обычный торговый день на бирже."))
+
     for col, definition in [('password', 'TEXT'), ('price', 'INTEGER DEFAULT 0'), 
                             ('is_for_sale', 'INTEGER DEFAULT 0'), ('is_approved', 'INTEGER DEFAULT 0'), 
                             ('photo_data', 'BLOB'), ('rarity', "TEXT DEFAULT 'Обычная'")]:
@@ -229,6 +285,7 @@ page = st.sidebar.radio("Разделы", [
     "🏎️ Общий Гараж", 
     "🏷️ Авторынок",
     "🅿️ Мой Гараж",
+    "📈 Биржа (Введите Текст)",
     "👤 Профиль",
     "🎰 Казино",
     "♻️ Свалка (Утилизация)",
@@ -434,7 +491,165 @@ elif page == "🅿️ Мой Гараж":
                                 st.success("Настройки успешно обновлены!")
                                 st.rerun()
 
-# --- 4. ПРОФИЛЬ ---
+# --- 4. БИРЖА (ВВЕДИТЕ ТЕКСТ) ---
+elif page == "📈 Биржа (Введите Текст)":
+    st.title("📈 Биржа Валют и Скачков Рынка")
+    st.write("Зарабатывайте на пампе и дампе! Учитывайте комиссии 3% и новостной фон.")
+
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT symbol, name, price, history, last_news FROM crypto_coins")
+    coins = c.fetchall()
+    conn.close()
+
+    if not coins:
+        st.info("Биржа временно закрыта.")
+    else:
+        coin_dict = {f"{c[1]} ({c[0]})": c for c in coins}
+        selected_coin_label = st.selectbox("Выберите актив для торговли:", list(coin_dict.keys()))
+        selected_coin = coin_dict[selected_coin_label]
+        
+        symbol, coin_name, price, history_str, last_news = selected_coin
+        history_list = [float(x) for x in history_str.split(",") if x]
+        
+        if not last_news:
+            last_news = "На рынке затишье."
+
+        # Показываем блок новостей
+        st.markdown(f"""
+        <div class="news-box">
+            <b>📰 Лента Новостей:</b> {last_news}
+        </div>
+        """, unsafe_allow_html=True)
+
+        col_m1, col_m2 = st.columns([2, 1])
+        with col_m1:
+            prev_price = history_list[-2] if len(history_list) > 1 else price
+            diff = price - prev_price
+            percent_change = (diff / prev_price) * 100 if prev_price else 0
+            
+            st.metric(label=f"Текущий курс {coin_name} ({symbol})", value=f"${price:.2f}", delta=f"{percent_change:+.2f}%")
+            
+            # График
+            df_chart = pd.DataFrame({"Курс ($)": history_list})
+            st.line_chart(df_chart)
+
+        with col_m2:
+            st.subheader("⚡ Симуляция скачка")
+            st.caption("Каждый клик имитирует новые события на рынке!")
+            if st.button("📊 Спровоцировать скачок цен"):
+                # Выбираем случайную новость
+                news_text, min_mult, max_mult = random.choice(MARKET_NEWS)
+                multiplier = 1 + random.uniform(min_mult, max_mult)
+                
+                new_price = max(1.0, round(price * multiplier, 2))
+                
+                history_list.append(new_price)
+                if len(history_list) > 25:
+                    history_list.pop(0)
+                
+                new_history_str = ",".join(map(str, history_list))
+                
+                conn = sqlite3.connect(DB_NAME)
+                c = conn.cursor()
+                c.execute("UPDATE crypto_coins SET price = ?, history = ?, last_news = ? WHERE symbol = ?", 
+                          (new_price, new_history_str, news_text, symbol))
+                conn.commit()
+                conn.close()
+                st.rerun()
+
+        st.markdown("---")
+        st.subheader("🛒 Торговый Терминал")
+
+        if not st.session_state.logged_user:
+            st.warning("⚠️ Войдите в аккаунт, чтобы торговать на бирже.")
+        else:
+            user = st.session_state.logged_user
+            
+            conn = sqlite3.connect(DB_NAME)
+            c = conn.cursor()
+            c.execute("SELECT balance FROM users WHERE username = ?", (user,))
+            user_balance = c.fetchone()[0]
+            
+            c.execute("SELECT amount, avg_buy_price FROM user_crypto WHERE username = ? AND symbol = ?", (user, symbol))
+            crypto_row = c.fetchone()
+            user_crypto_amount = crypto_row[0] if crypto_row else 0.0
+            avg_buy_price = crypto_row[1] if crypto_row else 0.0
+            conn.close()
+
+            # Считаем прибыльность портфеля
+            current_val = user_crypto_amount * price
+            invested_val = user_crypto_amount * avg_buy_price
+            pnl_dollars = current_val - invested_val
+            pnl_percent = (pnl_dollars / invested_val * 100) if invested_val > 0 else 0.0
+
+            col_b1, col_b2 = st.columns(2)
+            
+            with col_b1:
+                st.markdown(f"### 🟢 Купить {symbol}")
+                st.write(f"Ваш баланс: **${user_balance}**")
+                
+                buy_amount = st.number_input(f"Количество {symbol}", min_value=0.1, step=1.0, value=1.0, key="buy_amt")
+                gross_cost = buy_amount * price
+                fee = gross_cost * FEE_PERCENT
+                total_cost = gross_cost + fee
+                
+                st.write(f"Сумма: **${gross_cost:.2f}** + Комиссия 3%: **${fee:.2f}**")
+                st.write(f"**Итого спишется:** <span style='color:#ff4b4b;'>${total_cost:.2f}</span>", unsafe_allow_html=True)
+                
+                if st.button(f"🟢 Купить {symbol}"):
+                    if user_balance >= total_cost:
+                        new_bal = user_balance - total_cost
+                        new_amount = user_crypto_amount + buy_amount
+                        
+                        # Перерасчет средней цены входа
+                        new_avg_price = ((user_crypto_amount * avg_buy_price) + total_cost) / new_amount
+                        
+                        conn = sqlite3.connect(DB_NAME)
+                        c = conn.cursor()
+                        c.execute("UPDATE users SET balance = ? WHERE username = ?", (new_bal, user))
+                        c.execute("""INSERT INTO user_crypto (username, symbol, amount, avg_buy_price) 
+                                     VALUES (?, ?, ?, ?) 
+                                     ON CONFLICT(username, symbol) DO UPDATE SET amount = ?, avg_buy_price = ?""",
+                                  (user, symbol, new_amount, new_avg_price, new_amount, new_avg_price))
+                        conn.commit()
+                        conn.close()
+                        st.success(f"Успешно куплено {buy_amount} {symbol}!")
+                        st.rerun()
+                    else:
+                        st.error("Недостаточно денег на балансе с учетом комиссии!")
+
+            with col_b2:
+                st.markdown(f"### 🔴 Продать {symbol}")
+                st.write(f"В наличии: **{user_crypto_amount:.2f} {symbol}**")
+                if user_crypto_amount > 0:
+                    st.write(f"Средняя покупка: **${avg_buy_price:.2f}** | PnL: **{pnl_dollars:+.2f}$ ({pnl_percent:+.2f}%)**")
+                
+                sell_amount = st.number_input(f"Количество на продажу", min_value=0.1, max_value=max(0.1, user_crypto_amount), step=1.0, value=min(1.0, max(0.1, user_crypto_amount)), key="sell_amt")
+                gross_payout = sell_amount * price
+                sell_fee = gross_payout * FEE_PERCENT
+                net_payout = gross_payout - sell_fee
+                
+                st.write(f"Сумма: **${gross_payout:.2f}** - Комиссия 3%: **${sell_fee:.2f}**")
+                st.write(f"**Итого зачислится:** <span style='color:#00f5d4;'>${net_payout:.2f}</span>", unsafe_allow_html=True)
+                
+                if st.button(f"🔴 Продать {symbol}"):
+                    if user_crypto_amount >= sell_amount:
+                        new_bal = user_balance + net_payout
+                        new_amount = user_crypto_amount - sell_amount
+                        
+                        conn = sqlite3.connect(DB_NAME)
+                        c = conn.cursor()
+                        c.execute("UPDATE users SET balance = ? WHERE username = ?", (new_bal, user))
+                        c.execute("UPDATE user_crypto SET amount = ? WHERE username = ? AND symbol = ?", (new_amount, user, symbol))
+                        conn.commit()
+                        conn.close()
+                        st.success(f"Успешно продано {sell_amount} {symbol}!")
+                        st.rerun()
+                    else:
+                        st.error("У вас нет столько монет!")
+
+# --- 5. ПРОФИЛЬ ---
 elif page == "👤 Профиль":
     st.title("👤 Профиль игрока")
     
@@ -450,6 +665,9 @@ elif page == "👤 Профиль":
         
         c.execute("SELECT COUNT(*), SUM(CASE WHEN is_approved=1 THEN 1 ELSE 0 END) FROM garage WHERE owner = ?", (current_user,))
         car_stats = c.fetchone()
+        
+        c.execute("SELECT symbol, amount, avg_buy_price FROM user_crypto WHERE username = ? AND amount > 0", (current_user,))
+        user_cryptos = c.fetchall()
         conn.close()
         
         balance = user_info[0] if user_info else 0
@@ -457,12 +675,15 @@ elif page == "👤 Профиль":
         total_cars = car_stats[0] if car_stats else 0
         approved_cars = car_stats[1] if car_stats else 0
 
+        crypto_str = ", ".join([f"{amt:.2f} {sym}" for sym, amt, _ in user_cryptos]) if user_cryptos else "Нет активов"
+
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #1e1e2f, #111118); padding: 25px; border-radius: 15px; border: 2px solid #4f46e5; box-shadow: 0 0 15px rgba(79, 70, 229, 0.4); margin-bottom: 25px;">
             <h2 style="margin-top: 0; color: #818cf8;">👤 Игрок: {current_user}</h2>
             <hr style="border-color: #374151;">
             <p style="font-size: 18px;">💰 <b>Баланс:</b> <span style="color: #34d399;">${balance}</span></p>
             <p style="font-size: 18px;">💼 <b>Работа:</b> <span style="color: #fbbf24;">{job}</span></p>
+            <p style="font-size: 18px;">📈 <b>Криптоактивы:</b> <span style="color: #38bdf8;">{crypto_str}</span></p>
             <p style="font-size: 18px;">🚘 <b>Всего машин в гараже:</b> {total_cars} (Одобрено: {approved_cars})</p>
         </div>
         """, unsafe_allow_html=True)
@@ -480,7 +701,7 @@ elif page == "👤 Профиль":
             df_profile = pd.DataFrame(my_profile_cars, columns=["ID", "Название", "Цена ($)", "На рынке", "Одобрено", "Редкость"])
             st.dataframe(df_profile, use_container_width=True)
 
-# --- 5. КАЗИНО ---
+# --- 6. КАЗИНО ---
 elif page == "🎰 Казино":
     st.title("🎰 Городское Казино (Рулетка)")
     
@@ -503,7 +724,6 @@ elif page == "🎰 Казино":
         else:
             col1, col2 = st.columns([1, 1])
             with col1:
-                # Динамический расчет максимального и дефолтного значения для исключения ошибок
                 max_bet = user_balance
                 default_bet = min(100, user_balance)
                 
@@ -522,6 +742,8 @@ elif page == "🎰 Казино":
                     if user_balance < bet_amount:
                         st.error("Недостаточно денег на балансе!")
                     else:
+                        play_audio(SOUND_SPIN)
+                        
                         with st.spinner("🎲 Рулетка вращается, шарик прыгает по лункам..."):
                             time.sleep(2.5)
                         
@@ -550,10 +772,12 @@ elif page == "🎰 Казино":
                         c = conn.cursor()
                         if is_win:
                             new_bal = user_balance + payout
+                            play_audio(SOUND_WIN)
                             st.balloons()
                             st.success(f"🎉 ПОБЕДА! Выпало число **{winning_num} ({winning_color})**.\n\nВы выиграли **${payout}**! Баланс обновлен.")
                         else:
                             new_bal = user_balance - bet_amount
+                            play_audio(SOUND_LOSE)
                             st.error(f"❌ ПРОИГРЫШ! Выпало число **{winning_num} ({winning_color})**.\n\nВы потеряли **${bet_amount}**.")
                             
                         c.execute("UPDATE users SET balance = ? WHERE username = ?", (new_bal, current_user))
@@ -562,7 +786,7 @@ elif page == "🎰 Казино":
                 else:
                     st.info("👈 Настройте ставку слева и нажмите **«Вращать рулетку»**.")
 
-# --- 6. СВАЛКА (УТИЛИЗАЦИЯ) ---
+# --- 7. СВАЛКА (УТИЛИЗАЦИЯ) ---
 elif page == "♻️ Свалка (Утилизация)":
     st.title("♻️ Мгновенная утилизация авто")
     st.write(f"Сдайте свою машину на свалку! Фиксированная компенсация за утилизацию составляет **${FIXED_SCRAP_PAYOUT}**.")
@@ -598,7 +822,7 @@ elif page == "♻️ Свалка (Утилизация)":
                         st.success(f"Машина утилизирована! Вы получили ${scrap_value}.")
                         st.rerun()
 
-# --- 7. ИГРОКИ И БАЛАНСЫ ---
+# --- 8. ИГРОКИ И БАЛАНСЫ ---
 elif page == "💰 Игроки и Балансы":
     st.title("💰 Экономика и Список Игроков")
     conn = sqlite3.connect(DB_NAME)
@@ -610,7 +834,7 @@ elif page == "💰 Игроки и Балансы":
     else:
         st.dataframe(df, use_container_width=True)
 
-# --- 8. ДОБАВИТЬ МАШИНУ ---
+# --- 9. ДОБАВИТЬ МАШИНУ ---
 elif page == "➕ Добавить машину":
     st.title("➕ Добавление автомобиля")
     
@@ -648,7 +872,7 @@ elif page == "➕ Добавить машину":
                 else:
                     st.error("Заполните название, ссылку на мод и загрузите .pc файл!")
 
-# --- 9. ПАНЕЛЬ АДМИНИСТРАТОРА ---
+# --- 10. ПАНЕЛЬ АДМИНИСТРАТОРА ---
 elif page == "👑 Панель Администратора":
     st.title("👑 Управление Сервером (Админ)")
     
@@ -657,7 +881,7 @@ elif page == "👑 Панель Администратора":
     if admin_pass == ADMIN_PASSWORD and ADMIN_PASSWORD != "":
         st.success("Доступ разрешен!")
         
-        tab1, tab2, tab3 = st.tabs(["👥 Игроки", "🏎️ Редактирование Машин", "🛡️ Модерация машин"])
+        tab1, tab2, tab3, tab4 = st.tabs(["👥 Игроки", "🏎️ Редактирование Машин", "🛡️ Модерация машин", "🪙 Создание монет"])
         
         with tab1:
             st.subheader("Управление игроками (Изменение / Удаление)")
@@ -814,3 +1038,28 @@ elif page == "👑 Панель Администратора":
                             st.warning(f"Машина #{p_id} отклонена и удалена.")
                             st.rerun()
                     st.markdown("---")
+
+        with tab4:
+            st.subheader("🪙 Создание новой валюты на бирже")
+            with st.form("add_coin_form"):
+                new_symbol = st.text_input("Тикер / Символ монеты (например: BTC, DOGE)").upper()
+                new_coin_name = st.text_input("Полное название (например: Bitcoin)")
+                start_price = st.number_input("Стартовая цена ($)", min_value=1.0, value=100.0, step=10.0)
+                
+                coin_submit = st.form_submit_button("➕ Создать новую валюту")
+                if coin_submit:
+                    if new_symbol and new_coin_name:
+                        conn = sqlite3.connect(DB_NAME)
+                        c = conn.cursor()
+                        init_hist = f"{start_price*0.9:.1f},{start_price*0.95:.1f},{start_price:.1f}"
+                        try:
+                            c.execute("INSERT INTO crypto_coins (symbol, name, price, history, last_news) VALUES (?, ?, ?, ?, ?)",
+                                      (new_symbol, new_coin_name, start_price, init_hist, "Валюта впервые вышла на биржу!"))
+                            conn.commit()
+                            st.success(f"Монета {new_coin_name} ({new_symbol}) успешно добавлена на биржу!")
+                        except sqlite3.IntegrityError:
+                            st.error("Монета с таким тикером уже существует!")
+                        conn.close()
+                        st.rerun()
+                    else:
+                        st.error("Заполните все поля!")
