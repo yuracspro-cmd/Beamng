@@ -594,7 +594,8 @@ elif page == "👑 Панель Администратора":
             st.subheader("Машины, ожидающие проверки")
             conn = sqlite3.connect(DB_NAME)
             c = conn.cursor()
-            c.execute("SELECT id, car_name, mod_link, photo_url, photo_data, owner, price FROM garage WHERE is_approved = 0")
+            # Добавили выборку pc_filename и pc_data для скачивания админом
+            c.execute("SELECT id, car_name, mod_link, pc_filename, pc_data, photo_url, photo_data, owner, price FROM garage WHERE is_approved = 0")
             pending_cars = c.fetchall()
             conn.close()
 
@@ -602,10 +603,21 @@ elif page == "👑 Панель Администратора":
                 st.info("Нет машин на модерации. Всё проверено!")
             else:
                 for p_car in pending_cars:
-                    p_id, p_name, p_link, p_photo, p_photo_data, p_owner, p_price = p_car
+                    p_id, p_name, p_link, p_pc_filename, p_pc_data, p_photo, p_photo_data, p_owner, p_price = p_car
                     st.markdown(f"### 🚘 {p_name} (ID: {p_id})")
                     st.write(f"👤 **Владелец:** {p_owner} | 💵 **Цена:** ${p_price}")
                     st.markdown(f"🔗 [Ссылка на мод]({p_link})")
+                    
+                    # Кнопка скачивания .pc файла для проверки админом
+                    if p_pc_data and p_pc_filename:
+                        st.download_button(
+                            label=f"📥 Скачать конфигурацию {p_pc_filename}",
+                            data=p_pc_data,
+                            file_name=p_pc_filename,
+                            mime="text/plain",
+                            key=f"dl_pending_{p_id}"
+                        )
+                    
                     render_car_image(p_photo_data, p_photo)
                     
                     col_ap1, col_ap2 = st.columns(2)
