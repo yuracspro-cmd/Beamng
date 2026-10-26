@@ -9,7 +9,6 @@ DB_NAME = "beamng_rp.db"
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    # Таблица пользователей с полем пароля
     c.execute('''CREATE TABLE IF NOT EXISTS users 
                  (username TEXT PRIMARY KEY, balance INTEGER, job TEXT, password TEXT)''')
     
@@ -24,7 +23,6 @@ def init_db():
                   price INTEGER DEFAULT 0, 
                   is_for_sale INTEGER DEFAULT 0)''')
     
-    # Безопасное добавление колонок, если база уже существовала
     try:
         c.execute("ALTER TABLE users ADD COLUMN password TEXT")
     except sqlite3.OperationalError:
@@ -43,7 +41,6 @@ def init_db():
 
 init_db()
 
-# Инициализация сессии авторизации
 if "logged_user" not in st.session_state:
     st.session_state.logged_user = None
 
@@ -93,7 +90,7 @@ if st.session_state.logged_user is None:
             else:
                 st.sidebar.warning("Введите ник и пароль для регистрации.")
 else:
-    st.sidebar.success(f"Вы вошли як: **{st.session_state.logged_user}**")
+    st.sidebar.success(f"Вы вошли как: **{st.session_state.logged_user}**")
     if st.sidebar.button("Выйти из аккаунта"):
         st.session_state.logged_user = None
         st.rerun()
@@ -148,7 +145,6 @@ if page == "🏎️ Гараж и Авторынок":
                     key=f"dl_{car_id}"
                 )
 
-                # Покупка машины на авторынке
                 if is_for_sale:
                     st.markdown("---")
                     if st.session_state.logged_user:
@@ -186,7 +182,7 @@ elif page == "♻️ Свалка (Утилизация)":
         st.warning("⚠️ Пожалуйста, войдите в аккаунт в боковой панели, чтобы увидеть свои машины.")
     else:
         owner_search = st.session_state.logged_user
-        st.info(Вы управляете гаражом игрока: **{owner_search}**)
+        st.info(f"Вы управляете гаражом игрока: **{owner_search}**")
         
         conn = sqlite3.connect(DB_NAME)
         c = conn.cursor()
@@ -233,7 +229,7 @@ elif page == "➕ Добавить машину":
         st.warning("⚠️ Пожалуйста, войдите в аккаунт в боковой панели, чтобы добавить машину в гараж.")
     else:
         with st.form("add_car_form"):
-            st.write(Владелец: **{st.session_state.logged_user}** (автоматически))
+            st.write(f"Владелец: **{st.session_state.logged_user}** (автоматически)")
             car_name = st.text_input("Название машины")
             mod_link = st.text_input("Ссылка на мод")
             photo_url = st.text_input("Ссылка на скриншот")
@@ -277,7 +273,6 @@ elif page == "👑 Панель Администратора":
             if st.button("Сохранить игрока"):
                 conn = sqlite3.connect(DB_NAME)
                 c = conn.cursor()
-                # Сохраняем или обновляем (если пароля нет при создании через админку, ставим стандартный 1234)
                 c.execute("SELECT password FROM users WHERE username = ?", (username,))
                 existing = c.fetchone()
                 pwd = existing[0] if existing else "1234"
