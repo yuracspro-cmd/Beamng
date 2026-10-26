@@ -1,14 +1,16 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import sqlite3
 import pandas as pd
 import re
 import random
+import json
 
 st.set_page_config(page_title="Портал BeamNG RP", page_icon="🏎️", layout="wide")
 
 DB_NAME = "beamng_rp.db"
 ADMIN_PASSWORD = st.secrets.get("admin_password", "1234")
-FIXED_SCRAP_PAYOUT = 800  # Фиксированная выплата свалки (защита от накрутки)
+FIXED_SCRAP_PAYOUT = 800
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -308,11 +310,10 @@ elif page == "🅿️ Мой Гараж":
                                 st.success("Настройки успешно обновлены!")
                                 st.rerun()
 
-# --- 4. КАЗИНО ---
+# --- 4. КАЗИНО (С ПЛАВНОЙ АНИМАЦИЕЙ) ---
 elif page == "🎰 Казино":
-    st.title("🎰 Городское Казино")
-    st.write("Испытайте удачу в нашей рулетке! Сделайте ставку на цвет или точное число.")
-
+    st.title("🎰 Городское Казино (Рулетка)")
+    
     if not st.session_state.logged_user:
         st.warning("⚠️ Пожалуйста, войдите в аккаунт в боковой панели, чтобы играть в казино.")
     else:
@@ -325,70 +326,94 @@ elif page == "🎰 Казино":
         user_balance = user_row[0] if user_row else 0
         conn.close()
 
-        st.info(f"Ваш текущий баланс: **${user_balance}**")
+        st.subheader(f"Ваш баланс: **${user_balance}**")
 
-        tab_color, tab_number = st.tabs(["🔴 / ⚫ Ставка на цвет (x2)", "🎯 Ставка на число (x35)"])
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            bet_amount = st.number_input("Размер ставки ($)", min_value=10, max_value=max(10, user_balance), value=100, step=50)
+            choice_type = st.radio("Тип ставки:", ["На Цвет (x2)", "На Число (x35)"])
+            
+            if choice_type == "На Цвет (x2)":
+                target_choice = st.selectbox("Выберите цвет:", ["Красное", "Черное"])
+            else:
+                target_choice = st.number_input("Выберите число (0 - 36):", min_value=0, max_value=36, value=7)
 
-        with tab_color:
-            bet_color_amount = st.number_input("Сумма ставки ($)", min_value=10, max_value=max(10, user_balance), value=50, step=10, key="bet_c")
-            color_choice = st.radio("Выберите цвет:", ["Красное", "Черное"])
+            spin_clicked = st.button("🎲 ВРАЩАТЬ РУЛЕТКУ", use_container_width=True)
 
-            if st.button("🎰 Крутить рулетку (Цвет)"):
-                if user_balance < bet_color_amount:
+        with col2:
+            if spin_clicked:
+                if user_balance < bet_amount:
                     st.error("Недостаточно денег на балансе!")
                 else:
-                    winning_number = random.randint(0, 36)
-                    if winning_number == 0:
+                    winning_num = random.randint(0, 36)
+                    
+                    # Логика определения цвета
+                    if winning_num == 0:
                         winning_color = "Зеленое"
-                    elif winning_number % 2 == 0:
+                    elif winning_num in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]:
                         winning_color = "Красное"
                     else:
                         winning_color = "Черное"
 
-                    st.write(f"Выпало число: **{winning_number} ({winning_color})**")
+                    # Рассчитываем выигрыш
+                    is_win = False
+                    payout = 0
+                    
+                    if choice_type == "На Цвет (x2)":
+                        if target_choice == winning_color:
+                            is_win = True
+                            payout = bet_amount
+                    else:
+                        if int(target_choice) == winning_num:
+                            is_win = True
+                            payout = bet_amount * 35
 
+                    # Обновляем БД
                     conn = sqlite3.connect(DB_NAME)
                     c = conn.cursor()
-                    if color_choice == winning_color:
-                        new_balance = user_balance + bet_color_amount
-                        c.execute("UPDATE users SET balance = ? WHERE username = ?", (new_balance, current_user))
-                        conn.commit()
-                        st.success(f"Победа! Вы выиграли ${bet_color_amount}! Новый баланс: ${new_balance}")
+                    if is_win:
+                        new_bal = user_balance + payout
                     else:
-                        new_balance = user_balance - bet_color_amount
-                        c.execute("UPDATE users SET balance = ? WHERE username = ?", (new_balance, current_user))
-                        conn.commit()
-                        st.error(f"Проигрыш! Вы потеряли ${bet_color_amount}. Новый баланс: ${new_balance}")
+                        new_bal = user_balance - bet_amount
+                    c.execute("UPDATE users SET balance = ? WHERE username = ?", (new_bal, current_user))
+                    conn.commit()
                     conn.close()
-                    st.rerun()
 
-        with tab_number:
-            bet_num_amount = st.number_input("Сумма ставки ($)", min_value=10, max_value=max(10, user_balance), value=50, step=10, key="bet_n")
-            number_choice = st.slider("Выберите число от 0 до 36:", 0, 36, 7)
+                    # HTML5 + CSS3 + JS Интерактивный виджет анимации
+                    html_code = f"""
+                    <div style="text-align:center; font-family: sans-serif; background: #111; color: white; padding: 20px; border-radius: 12px; border: 2px solid #333;">
+                        <h3 style="margin-top:0;">🎰 Идет вращение...</h3>
+                        <div id="wheel" style="font-size: 70px; margin: 20px 0; transition: transform 4s cubic-bezier(0.15, 0.9, 0.25, 1); display: inline-block;">
+                            🎡
+                        </div>
+                        <div id="result" style="font-size: 24px; font-weight: bold; height: 40px;"></div>
+                    </div>
+                    <script>
+                        setTimeout(function() {{
+                            document.getElementById('wheel').style.transform = 'rotate(1440deg)';
+                        }}, 100);
 
-            if st.button("🎯 Крутить рулетку (Число)"):
-                if user_balance < bet_num_amount:
-                    st.error("Недостаточно денег на балансе!")
-                else:
-                    winning_number = random.randint(0, 36)
-                    st.write(f"Выпало число: **{winning_number}**")
+                        setTimeout(function() {{
+                            var res = document.getElementById('result');
+                            var win = {json.dumps(is_win)};
+                            var num = {winning_num};
+                            var col = {json.dumps(winning_color)};
+                            var amount = {payout if is_win else bet_amount};
 
-                    conn = sqlite3.connect(DB_NAME)
-                    c = conn.cursor()
-                    if number_choice == winning_number:
-                        win_prize = bet_num_amount * 35
-                        new_balance = user_balance + win_prize
-                        c.execute("UPDATE users SET balance = ? WHERE username = ?", (new_balance, current_user))
-                        conn.commit()
-                        st.balloons()
-                        st.success(f"ДЖЕКПОТ! Вы угадали число и сорвали куш ${win_prize}!")
-                    else:
-                        new_balance = user_balance - bet_num_amount
-                        c.execute("UPDATE users SET balance = ? WHERE username = ?", (new_balance, current_user))
-                        conn.commit()
-                        st.error(f"Мимо! Вы потеряли ${bet_num_amount}. Новый баланс: ${new_balance}")
-                    conn.close()
-                    st.rerun()
+                            if(win) {{
+                                res.innerHTML = "🎉 ВЫПАЛО: " + num + " (" + col + ")<br><span style='color: #4CAF50;'>+ $" + amount + "</span>";
+                            }} else {{
+                                res.innerHTML = "❌ ВЫПАЛО: " + num + " (" + col + ")<br><span style='color: #F44336;'>- $" + amount + "</span>";
+                            }}
+                        }}, 4000);
+                    </script>
+                    """
+                    components.html(html_code, height=220)
+                    
+                    if st.button("🔄 Обновить баланс"):
+                        st.rerun()
+            else:
+                st.info("Сделайте ставку и нажмите кнопку вращения!")
 
 # --- 5. СВАЛКА (УТИЛИЗАЦИЯ) ---
 elif page == "♻️ Свалка (Утилизация)":
@@ -594,7 +619,6 @@ elif page == "👑 Панель Администратора":
             st.subheader("Машины, ожидающие проверки")
             conn = sqlite3.connect(DB_NAME)
             c = conn.cursor()
-            # Добавили выборку pc_filename и pc_data для скачивания админом
             c.execute("SELECT id, car_name, mod_link, pc_filename, pc_data, photo_url, photo_data, owner, price FROM garage WHERE is_approved = 0")
             pending_cars = c.fetchall()
             conn.close()
@@ -608,7 +632,6 @@ elif page == "👑 Панель Администратора":
                     st.write(f"👤 **Владелец:** {p_owner} | 💵 **Цена:** ${p_price}")
                     st.markdown(f"🔗 [Ссылка на мод]({p_link})")
                     
-                    # Кнопка скачивания .pc файла для проверки админом
                     if p_pc_data and p_pc_filename:
                         st.download_button(
                             label=f"📥 Скачать конфигурацию {p_pc_filename}",
