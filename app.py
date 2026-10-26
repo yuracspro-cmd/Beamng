@@ -14,7 +14,6 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS users 
                  (username TEXT PRIMARY KEY, balance INTEGER, job TEXT, password TEXT)''')
     
-    # Добавили поле photo_data для хранения картинок прямо в базе
     c.execute('''CREATE TABLE IF NOT EXISTS garage 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   car_name TEXT, 
@@ -54,7 +53,7 @@ def init_db():
 
 init_db()
 
-# Функция конвертации старых ссылок Google Диска (для обратной совместимости)
+# Функция конвертации старых ссылок Google Диска
 fn_fix_image_url = lambda url: (
     f"https://drive.google.com/uc?export=view&id={re.search(r'/file/d/([a-zA-Z0-9_-]+)', url).group(1)}"
     if url and re.search(r'/file/d/([a-zA-Z0-9_-]+)', url)
@@ -130,7 +129,7 @@ page = st.sidebar.radio("Разделы", [
     "👑 Панель Администратора"
 ])
 
-# Универсальная функция отрисовки картинки (приоритет у файла из базы, затем у ссылки)
+# Универсальная функция отрисовки картинки
 def render_car_image(photo_data, photo_url):
     if photo_data:
         try:
@@ -367,7 +366,6 @@ elif page == "➕ Добавить машину":
             car_name = st.text_input("Название машины")
             mod_link = st.text_input("Ссылка на мод")
             
-            # Теперь можно загрузить картинку напрямую с ПК!
             uploaded_photo = st.file_uploader("Загрузите фото машины (PNG, JPG)", type=["png", "jpg", "jpeg"])
             
             is_for_sale = st.checkbox("Выставить сразу на Авторынок?")
@@ -531,8 +529,7 @@ elif page == "👑 Панель Администратора":
                         if st.button(f"✅ Одобрить машину #{p_id}", key=f"app_{p_id}"):
                             conn = sqlite3.connect(DB_NAME)
                             c = conn.cursor()
-                            c.execute("UPDATE garage IS_APPROVED = 1 WHERE id = ?", (p_id,)) # Исправлено на корректный синтаксис ниже
-                            # Сделаем безопасный апдейт:
+                            # ИСПРАВЛЕНО: добавлено ключевое слово SET
                             c.execute("UPDATE garage SET is_approved = 1 WHERE id = ?", (p_id,))
                             conn.commit()
                             conn.close()
