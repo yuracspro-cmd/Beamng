@@ -28,7 +28,6 @@ st.markdown("""
     100% { text-shadow: 3px -3px #ff0055, -3px 3px #00ffcc; }
 }
 
-/* Общие правила для всех карточек, чтобы они были пиксель-в-пиксель одинакового размера */
 .psycho-legendary-card, .rare-card, .normal-card {
     box-sizing: border-box;
     width: 100%;
@@ -499,62 +498,69 @@ elif page == "🎰 Казино":
 
         st.subheader(f"Ваш баланс: **${user_balance}**")
 
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            bet_amount = st.number_input("Размер ставки ($)", min_value=10, max_value=max(10, user_balance), value=100, step=50)
-            choice_type = st.radio("Тип ставки:", ["На Цвет (x2)", "На Число (x35)"])
-            
-            if choice_type == "На Цвет (x2)":
-                target_choice = st.selectbox("Выберите цвет:", ["Красное", "Черное"])
-            else:
-                target_choice = st.number_input("Выберите число (0 - 36):", min_value=0, max_value=36, value=7)
-
-            spin_clicked = st.button("🎲 ВРАЩАТЬ РУЛЕТКУ", use_container_width=True)
-
-        with col2:
-            if spin_clicked:
-                if user_balance < bet_amount:
-                    st.error("Недостаточно денег на балансе!")
+        if user_balance < 10:
+            st.error("❌ У вас недостаточно средств для игры в казино (минимальная ставка: $10). Пополните баланс на работе или продажей авто.")
+        else:
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                # Динамический расчет максимального и дефолтного значения для исключения ошибок
+                max_bet = user_balance
+                default_bet = min(100, user_balance)
+                
+                bet_amount = st.number_input("Размер ставки ($)", min_value=10, max_value=max_bet, value=default_bet, step=10)
+                choice_type = st.radio("Тип ставки:", ["На Цвет (x2)", "На Число (x35)"])
+                
+                if choice_type == "На Цвет (x2)":
+                    target_choice = st.selectbox("Выберите цвет:", ["Красное", "Черное"])
                 else:
-                    with st.spinner("🎲 Рулетка вращается, шарик прыгает по лункам..."):
-                        time.sleep(2.5)
-                    
-                    winning_num = random.randint(0, 36)
-                    
-                    if winning_num == 0:
-                        winning_color = "Зеленое"
-                    elif winning_num in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]:
-                        winning_color = "Красное"
-                    else:
-                        winning_color = "Черное"
+                    target_choice = st.number_input("Выберите число (0 - 36):", min_value=0, max_value=36, value=7)
 
-                    is_win = False
-                    payout = 0
-                    
-                    if choice_type == "На Цвет (x2)":
-                        if target_choice == winning_color:
-                            is_win = True
-                            payout = bet_amount
-                    else:
-                        if int(target_choice) == winning_num:
-                            is_win = True
-                            payout = bet_amount * 35
+                spin_clicked = st.button("🎲 ВРАЩАТЬ РУЛЕТКУ", use_container_width=True)
 
-                    conn = sqlite3.connect(DB_NAME)
-                    c = conn.cursor()
-                    if is_win:
-                        new_bal = user_balance + payout
-                        st.balloons()
-                        st.success(f"🎉 ПОБЕДА! Выпало число **{winning_num} ({winning_color})**.\n\nВы выиграли **${payout}**! Баланс обновлен.")
+            with col2:
+                if spin_clicked:
+                    if user_balance < bet_amount:
+                        st.error("Недостаточно денег на балансе!")
                     else:
-                        new_bal = user_balance - bet_amount
-                        st.error(f"❌ ПРОИГРЫШ! Выпало число **{winning_num} ({winning_color})**.\n\nВы потеряли **${bet_amount}**.")
+                        with st.spinner("🎲 Рулетка вращается, шарик прыгает по лункам..."):
+                            time.sleep(2.5)
                         
-                    c.execute("UPDATE users SET balance = ? WHERE username = ?", (new_bal, current_user))
-                    conn.commit()
-                    conn.close()
-            else:
-                st.info("👈 Настройте ставку слева и нажмите **«Вращать рулетку»**.")
+                        winning_num = random.randint(0, 36)
+                        
+                        if winning_num == 0:
+                            winning_color = "Зеленое"
+                        elif winning_num in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]:
+                            winning_color = "Красное"
+                        else:
+                            winning_color = "Черное"
+
+                        is_win = False
+                        payout = 0
+                        
+                        if choice_type == "На Цвет (x2)":
+                            if target_choice == winning_color:
+                                is_win = True
+                                payout = bet_amount
+                        else:
+                            if int(target_choice) == winning_num:
+                                is_win = True
+                                payout = bet_amount * 35
+
+                        conn = sqlite3.connect(DB_NAME)
+                        c = conn.cursor()
+                        if is_win:
+                            new_bal = user_balance + payout
+                            st.balloons()
+                            st.success(f"🎉 ПОБЕДА! Выпало число **{winning_num} ({winning_color})**.\n\nВы выиграли **${payout}**! Баланс обновлен.")
+                        else:
+                            new_bal = user_balance - bet_amount
+                            st.error(f"❌ ПРОИГРЫШ! Выпало число **{winning_num} ({winning_color})**.\n\nВы потеряли **${bet_amount}**.")
+                            
+                        c.execute("UPDATE users SET balance = ? WHERE username = ?", (new_bal, current_user))
+                        conn.commit()
+                        conn.close()
+                else:
+                    st.info("👈 Настройте ставку слева и нажмите **«Вращать рулетку»**.")
 
 # --- 6. СВАЛКА (УТИЛИЗАЦИЯ) ---
 elif page == "♻️ Свалка (Утилизация)":
