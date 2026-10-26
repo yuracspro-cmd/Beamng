@@ -48,7 +48,7 @@ def init_db():
 
 init_db()
 
-# Функция для превращения ссылки Google Диска в прямую картинку
+# Функция для конвертации ссылок Google Диска в прямые картинки
 fn_fix_image_url = lambda url: (
     f"https://drive.google.com/uc?export=view&id={re.search(r'/file/d/([a-zA-Z0-9_-]+)', url).group(1)}"
     if url and re.search(r'/file/d/([a-zA-Z0-9_-]+)', url)
@@ -73,42 +73,40 @@ if st.session_state.logged_user is None:
     
     col_l1, col_l2 = st.sidebar.columns(2)
     with col_l1:
-        if st.sidebar.button("Войти") or st.button("Войти_"): # Кнопки входа
-            pass # Обработка ниже через формы или колонки
-    # Простой блок авторизации в сайдбаре
-    if st.sidebar.button("Войти в систему"):
-        if login_user and login_pass:
-            conn = sqlite3.connect(DB_NAME)
-            c = conn.cursor()
-            c.execute("SELECT password FROM users WHERE username = ?", (login_user,))
-            row = c.fetchone()
-            conn.close()
-            if row and row[0] == login_pass:
-                st.session_state.logged_user = login_user
-                st.success(f"Вход выполнен, {login_user}!")
-                st.rerun()
-            else:
-                st.sidebar.error("Неверный ник или пароль!")
-        else:
-            st.sidebar.warning("Введите ник и пароль.")
-            
-    if st.sidebar.button("Зарегистрироваться"):
-        if login_user and login_pass:
-            conn = sqlite3.connect(DB_NAME)
-            c = conn.cursor()
-            c.execute("SELECT username FROM users WHERE username = ?", (login_user,))
-            if c.fetchone():
-                st.sidebar.error("Игрок с таким ником уже существует!")
-            else:
-                c.execute("INSERT INTO users (username, balance, job, password) VALUES (?, 1000, 'Безработный', ?)", 
-                          (login_user, login_pass))
-                conn.commit()
+        if st.sidebar.button("Войти"):
+            if login_user and login_pass:
+                conn = sqlite3.connect(DB_NAME)
+                c = conn.cursor()
+                c.execute("SELECT password FROM users WHERE username = ?", (login_user,))
+                row = c.fetchone()
                 conn.close()
-                st.session_state.logged_user = login_user
-                st.sidebar.success(f"Аккаунт создан! Добро пожаловать, {login_user}!")
-                st.rerun()
-        else:
-            st.sidebar.warning("Введите ник и пароль для регистрации.")
+                if row and row[0] == login_pass:
+                    st.session_state.logged_user = login_user
+                    st.success(f"Вход выполнен, {login_user}!")
+                    st.rerun()
+                else:
+                    st.sidebar.error("Неверный ник или пароль!")
+            else:
+                st.sidebar.warning("Введите ник и пароль.")
+                
+    with col_l2:
+        if st.sidebar.button("Регистрация"):
+            if login_user and login_pass:
+                conn = sqlite3.connect(DB_NAME)
+                c = conn.cursor()
+                c.execute("SELECT username FROM users WHERE username = ?", (login_user,))
+                if c.fetchone():
+                    st.sidebar.error("Игрок с таким ником уже существует!")
+                else:
+                    c.execute("INSERT INTO users (username, balance, job, password) VALUES (?, 1000, 'Безработный', ?)", 
+                              (login_user, login_pass))
+                    conn.commit()
+                    conn.close()
+                    st.session_state.logged_user = login_user
+                    st.sidebar.success(f"Аккаунт создан! Добро пожаловать, {login_user}!")
+                    st.rerun()
+            else:
+                st.sidebar.warning("Введите ник и пароль для регистрации.")
 else:
     st.sidebar.success(f"Вы вошли как: **{st.session_state.logged_user}**")
     if st.sidebar.button("Выйти из аккаунта"):
@@ -288,7 +286,6 @@ elif page == "🅿️ Мой Гараж":
                             key=f"dl_my_{car_id}"
                         )
 
-                        # Управление продажей прямо из личного гаража
                         st.markdown("---")
                         with st.form(f"sale_form_{car_id}"):
                             st.subheader("Настройки авторынка")
@@ -366,7 +363,6 @@ elif page == "➕ Добавить машину":
             mod_link = st.text_input("Ссылка на мод")
             photo_url = st.text_input("Ссылка на скриншот (Поддерживаются обычные ссылки и ссылки с Google Диска)")
             
-            # Поле цены теперь необязательное / опциональное
             is_for_sale = st.checkbox("Выставить сразу на Авторынок?")
             price = st.number_input("Цена машины ($) [укажите, если продаете]", value=0, step=500)
             
