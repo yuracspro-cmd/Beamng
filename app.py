@@ -1,10 +1,9 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import sqlite3
 import pandas as pd
 import re
 import random
-import json
+import time
 
 st.set_page_config(page_title="Портал BeamNG RP", page_icon="🏎️", layout="wide")
 
@@ -310,7 +309,7 @@ elif page == "🅿️ Мой Гараж":
                                 st.success("Настройки успешно обновлены!")
                                 st.rerun()
 
-# --- 4. КАЗИНО (С ПЛАВНОЙ АНИМАЦИЕЙ) ---
+# --- 4. КАЗИНО (ИСПРАВЛЕННОЕ И НАДЕЖНОЕ) ---
 elif page == "🎰 Казино":
     st.title("🎰 Городское Казино (Рулетка)")
     
@@ -345,9 +344,12 @@ elif page == "🎰 Казино":
                 if user_balance < bet_amount:
                     st.error("Недостаточно денег на балансе!")
                 else:
+                    # Плавная анимация прокрутки рулетки через нативный статус ожидания
+                    with st.spinner("🎲 Рулетка вращается, шарик прыгает по лункам..."):
+                        time.sleep(2.5)
+                    
                     winning_num = random.randint(0, 36)
                     
-                    # Логика определения цвета
                     if winning_num == 0:
                         winning_color = "Зеленое"
                     elif winning_num in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]:
@@ -355,7 +357,6 @@ elif page == "🎰 Казино":
                     else:
                         winning_color = "Черное"
 
-                    # Рассчитываем выигрыш
                     is_win = False
                     payout = 0
                     
@@ -368,52 +369,21 @@ elif page == "🎰 Казино":
                             is_win = True
                             payout = bet_amount * 35
 
-                    # Обновляем БД
                     conn = sqlite3.connect(DB_NAME)
                     c = conn.cursor()
                     if is_win:
                         new_bal = user_balance + payout
+                        st.balloons()
+                        st.success(f"🎉 ПОБЕДА! Выпало число **{winning_num} ({winning_color})**.\n\nВы выиграли **${payout}**! Баланс обновлен.")
                     else:
                         new_bal = user_balance - bet_amount
+                        st.error(f"❌ ПРОИГРЫШ! Выпало число **{winning_num} ({winning_color})**.\n\nВы потеряли **${bet_amount}**.")
+                        
                     c.execute("UPDATE users SET balance = ? WHERE username = ?", (new_bal, current_user))
                     conn.commit()
                     conn.close()
-
-                    # HTML5 + CSS3 + JS Интерактивный виджет анимации
-                    html_code = f"""
-                    <div style="text-align:center; font-family: sans-serif; background: #111; color: white; padding: 20px; border-radius: 12px; border: 2px solid #333;">
-                        <h3 style="margin-top:0;">🎰 Идет вращение...</h3>
-                        <div id="wheel" style="font-size: 70px; margin: 20px 0; transition: transform 4s cubic-bezier(0.15, 0.9, 0.25, 1); display: inline-block;">
-                            🎡
-                        </div>
-                        <div id="result" style="font-size: 24px; font-weight: bold; height: 40px;"></div>
-                    </div>
-                    <script>
-                        setTimeout(function() {{
-                            document.getElementById('wheel').style.transform = 'rotate(1440deg)';
-                        }}, 100);
-
-                        setTimeout(function() {{
-                            var res = document.getElementById('result');
-                            var win = {json.dumps(is_win)};
-                            var num = {winning_num};
-                            var col = {json.dumps(winning_color)};
-                            var amount = {payout if is_win else bet_amount};
-
-                            if(win) {{
-                                res.innerHTML = "🎉 ВЫПАЛО: " + num + " (" + col + ")<br><span style='color: #4CAF50;'>+ $" + amount + "</span>";
-                            }} else {{
-                                res.innerHTML = "❌ ВЫПАЛО: " + num + " (" + col + ")<br><span style='color: #F44336;'>- $" + amount + "</span>";
-                            }}
-                        }}, 4000);
-                    </script>
-                    """
-                    components.html(html_code, height=220)
-                    
-                    if st.button("🔄 Обновить баланс"):
-                        st.rerun()
             else:
-                st.info("Сделайте ставку и нажмите кнопку вращения!")
+                st.info("👈 Настройте ставку слева и нажмите **«Вращать рулетку»**.")
 
 # --- 5. СВАЛКА (УТИЛИЗАЦИЯ) ---
 elif page == "♻️ Свалка (Утилизация)":
