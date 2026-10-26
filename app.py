@@ -6,11 +6,10 @@ import re
 st.set_page_config(page_title="Портал BeamNG RP", page_icon="🏎️", layout="wide")
 
 DB_NAME = "beamng_rp.db"
-ADMIN_PASSWORD = st.secrets.get("admin_password")
+ADMIN_PASSWORD = st.secrets.get("admin_password", "1234")
 
-# Максимальная сумма, которую свалка готова заплатить за любую машину (защита от абуза)
-MAX_SCRAP_PAYOUT = 3000 
-DEFAULT_SCRAP_PAYOUT = 500
+# Фиксированная выплата свалки за любую утилизированную машину (не зависит от рынка!)
+FIXED_SCRAP_PAYOUT = 800 
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -309,10 +308,10 @@ elif page == "🅿️ Мой Гараж":
                                 st.success("Настройки успешно обновлены!")
                                 st.rerun()
 
-# --- 4. СВАЛКА (УТИЛИЗАЦИЯ С ЗАЩИТОЙ ОТ АБУЗА) ---
+# --- 4. СВАЛКА (УТИЛИЗАЦИЯ С ФИКСИРОВАННОЙ ВЫПЛАТОЙ) ---
 elif page == "♻️ Свалка (Утилизация)":
     st.title("♻️ Мгновенная утилизация авто")
-    st.write(f"Сдайте свою машину на свалку! Свалка выкупает авто за 30% от реальной стоимости (максимум **${MAX_SCRAP_PAYOUT}**).")
+    st.write(f"Сдайте свою машину на свалку! Фиксированная государственная компенсация за утилизацию любого авто составляет **${FIXED_SCRAP_PAYOUT}**.")
 
     if not st.session_state.logged_user:
         st.warning("⚠️ Пожалуйста, войдите в аккаунт в боковой панели.")
@@ -321,23 +320,19 @@ elif page == "♻️ Свалка (Утилизация)":
         
         conn = sqlite3.connect(DB_NAME)
         c = conn.cursor()
-        c.execute("SELECT id, car_name, price FROM garage WHERE owner = ?", (owner_search,))
+        c.execute("SELECT id, car_name FROM garage WHERE owner = ?", (owner_search,))
         my_cars = c.fetchall()
         conn.close()
 
         if not my_cars:
             st.info("У вас нет машин в личном гараже для утилизации.")
         else:
-            for car_id, name, price in my_cars:
-                # ЗАЩИТА ОТ АБУЗА: Выплата ограниченна лимитом MAX_SCRAP_PAYOUT ($3000)
-                calculated_scrap = int(price * 0.3) if price > 0 else DEFAULT_SCRAP_PAYOUT
-                scrap_value = min(calculated_scrap, MAX_SCRAP_PAYOUT)
-                if scrap_value < DEFAULT_SCRAP_PAYOUT:
-                    scrap_value = DEFAULT_SCRAP_PAYOUT
+            for car_id, name in my_cars:
+                scrap_value = FIXED_SCRAP_PAYOUT
                 
                 col1, col2 = st.columns([3, 1])
                 with col1:
-                    st.write(f"🚘 **{name}** -> Выкуп свалки: **${scrap_value}**")
+                    st.write(f"🚘 **{name}** -> Выплата свалки: **${scrap_value}**")
                 with col2:
                     if st.button(f"♻️ Утилизировать", key=f"scrap_{car_id}"):
                         conn = sqlite3.connect(DB_NAME)
