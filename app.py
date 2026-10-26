@@ -259,8 +259,7 @@ elif page == "👑 Панель Администратора":
     st.title("👑 Управление Сервером (Админ)")
     
     admin_pass = st.text_input("Введите пароль администратора", type="password")
-    # СОВЕТ: Поменяйте "1234" на свой надежный пароль!
-    if admin_pass == "1234": 
+    if admin_pass == "1234":
         st.success("Доступ разрешен!")
         
         tab1, tab2 = st.tabs(["👥 Игроки", "🏎️ Редактирование Машин"])
@@ -279,7 +278,6 @@ elif page == "👑 Панель Администратора":
             else:
                 selected_user = st.selectbox("Выберите игрока для управления", all_users)
                 
-                # Получаем текущие данные выбранного игрока
                 conn = sqlite3.connect(DB_NAME)
                 c = conn.cursor()
                 c.execute("SELECT balance, job FROM users WHERE username = ?", (selected_user,))
@@ -289,8 +287,9 @@ elif page == "👑 Панель Администратора":
                 if user_data:
                     with st.form("edit_user_form"):
                         new_balance = st.number_input("Баланс ($)", value=user_data[0], step=100)
-                        new_job = st.selectbox("Работа", ["Курьер", "Дальнобойщик", "Механик", "Полицейский", "Безработный"], 
-                                               index=["Курьер", "Дальнобойщик", "Механик", "Полицейский", "Безработный"].index(user_data[1]) if user_data[1] in ["Курьер", "Дальнобойщик", "Механик", "Полицейский", "Безработный"] else 0)
+                        jobs_list = ["Курьер", "Дальнобойщик", "Механик", "Полицейский", "Безработный"]
+                        default_idx = jobs_list.index(user_data[1]) if user_data[1] in jobs_list else 0
+                        new_job = st.selectbox("Работа", jobs_list, index=default_idx)
                         
                         submitted = st.form_submit_button("💾 Сохранить изменения игрока")
                         if submitted:
@@ -302,14 +301,11 @@ elif page == "👑 Панель Администратора":
                             st.success(f"Данные игрока {selected_user} успешно обновлены!")
                             st.rerun()
 
-                    # Кнопка удаления игрока (вне формы, чтобы работала отдельно)
                     st.markdown("---")
                     if st.button(f"❌ Полностью удалить игрока '{selected_user}' и все его машины"):
                         conn = sqlite3.connect(DB_NAME)
                         c = conn.cursor()
-                        # Удаляем самого игрока
                         c.execute("DELETE FROM users WHERE username = ?", (selected_user,))
-                        # Удаляем все его машины из гаража/авторынка
                         c.execute("DELETE FROM garage WHERE owner = ?", (selected_user,))
                         conn.commit()
                         conn.close()
@@ -332,6 +328,7 @@ elif page == "👑 Панель Администратора":
                 selected_car_id = car_options[selected_car_label]
 
                 conn = sqlite3.connect(DB_NAME)
+                c = conn.cursor()
                 c.execute("SELECT car_name, mod_link, photo_url, owner, price, is_for_sale FROM garage WHERE id = ?", (selected_car_id,))
                 edit_car = c.fetchone()
                 conn.close()
